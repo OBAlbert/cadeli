@@ -225,6 +225,15 @@ class _LoginPageState extends State<LoginPage> {
                   //   ),
                   // ],
               children: [
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: IconButton(
+                    icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ),
+                const SizedBox(height: 10),
+
                 const SizedBox(height: 16),
 
                 const Text(
@@ -293,21 +302,63 @@ class _LoginPageState extends State<LoginPage> {
 
                 const SizedBox(height: 16),
 
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    SignInButton(
-                      Buttons.GoogleDark,
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      onPressed: loginWithGoogle,
+                // Row(
+                //   mainAxisAlignment: MainAxisAlignment.center,
+                //   children: [
+                //     SignInButton(
+                //       Buttons.GoogleDark,
+                //       padding: const EdgeInsets.symmetric(horizontal: 12),
+                //       onPressed: loginWithGoogle,
+                //     ),
+                //     const SizedBox(width: 12),
+                //     IconButton(
+                //       icon: const Icon(Icons.phone, size: 28, color: Colors.white),
+                //       onPressed: () => setState(() => _showPhoneField = !_showPhoneField),
+                //     ),
+                //   ],
+                // ),
+                const SizedBox(height: 16),
+
+                // Google Sign-In styled button
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: ElevatedButton.icon(
+                    icon: const Icon(Icons.g_mobiledata, color: Colors.white, size: 28),
+                    label: const Text(
+                      "Continue with Google",
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white),
                     ),
-                    const SizedBox(width: 12),
-                    IconButton(
-                      icon: const Icon(Icons.phone, size: 28, color: Colors.white),
-                      onPressed: () => setState(() => _showPhoneField = !_showPhoneField),
+                    onPressed: loginWithGoogle,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white.withOpacity(0.05),
+                      side: const BorderSide(color: Colors.white24),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     ),
-                  ],
+                  ),
                 ),
+
+                const SizedBox(height: 12),
+
+                // Phone Sign-In styled button
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: ElevatedButton.icon(
+                    icon: const Icon(Icons.phone, color: Colors.white),
+                    label: const Text(
+                      "Continue with phone number",
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white),
+                    ),
+                    onPressed: () => setState(() => _showPhoneField = !_showPhoneField),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white.withOpacity(0.05),
+                      side: const BorderSide(color: Colors.white24),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                  ),
+                ),
+
 
                 if (_showPhoneField) ...[
                   const SizedBox(height: 16),
@@ -352,23 +403,20 @@ class _LoginPageState extends State<LoginPage> {
                 ),
 
 
-                // Row(
-                //   mainAxisAlignment: MainAxisAlignment.center,
-                //   children: [
-                //     const Text("Not a member? ", style: TextStyle(color: Colors.white)),
-                //     GestureDetector(
-                //       onTap: () {
-                //         Navigator.push(context, MaterialPageRoute(builder: (_) => const RegisterPage()));
-                //       },
-                //       child: const Text(
-                //         "Register now",
-                //         style: TextStyle(fontWeight: FontWeight.bold, color: Colors.purpleAccent),
-                //       ),
-                //     ),
-                //   ],
-                // ),
-
                 const SizedBox(height: 16),
+
+                const Padding(
+                  padding: EdgeInsets.only(top: 32),
+                  child: Text(
+                    "Information about your login or registration.\nBy signing up you agree to our terms and conditions and privacy policy.",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.white70,
+                    ),
+                  ),
+                ),
+
               ],
 
             ),
