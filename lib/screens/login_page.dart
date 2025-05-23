@@ -110,131 +110,274 @@ class _LoginPageState extends State<LoginPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFA1BDC7),
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(40),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-              child: Container(
-                padding: const EdgeInsets.all(30),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(40),
-                  border: Border.all(color: Colors.white.withOpacity(0.25)),
-                ),
-                child: Column(
+      body: Container(
+        decoration: const BoxDecoration(
+          image: DecorationImage(
+            image: AssetImage('assets/background/fade_base.jpg'),
+            fit: BoxFit.cover,
+          ),
+        ),
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
+                  // children: [
+                  //   const Text(
+                  //     "Hello Again!",
+                  //     textAlign: TextAlign.center,
+                  //     style: TextStyle(
+                  //       fontSize: 28,
+                  //       fontWeight: FontWeight.bold,
+                  //       color: Colors.white,
+                  //     ),
+                  //   ),
+                  //   SizedBox(height: 4),
+                  //   const Text(
+                  //     "Set it once. Forget the rest.",
+                  //     textAlign: TextAlign.center,
+                  //     style: TextStyle(
+                  //       fontSize: 14,
+                  //       color: Colors.white70,
+                  //     ),
+                  //   ),
+                  //
+                  //   _glassInput("Enter email", emailController),
+                  //   const SizedBox(height: 14),
+                  //   _glassInput("Password", passwordController, isPassword: true),
+                  //
+                  //   const SizedBox(height: 6),
+                  //   Align(
+                  //     alignment: Alignment.centerRight,
+                  //     child: TextButton(
+                  //       onPressed: () {},
+                  //       child: const Text(
+                  //         "Recovery Password",
+                  //         style: TextStyle(fontSize: 12, color: Colors.white),
+                  //       ),
+                  //     ),
+                  //   ),
+                  //
+                  //   // 🔴 Sign In Button (C70418)
+                  //   ElevatedButton(
+                  //     onPressed: login,
+                  //     style: ElevatedButton.styleFrom(
+                  //       backgroundColor: const Color(0xFFC70418),
+                  //       padding: const EdgeInsets.symmetric(vertical: 14),
+                  //       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  //     ),
+                  //     child: const Text("Sign In", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  //   ),
+                  //
+                  //   const SizedBox(height: 20),
+                  //   const Center(child: Text("Or continue with", style: TextStyle(color: Colors.white70))),
+                  //   const SizedBox(height: 12),
+                  //
+                  //   Row(
+                  //     mainAxisAlignment: MainAxisAlignment.center,
+                  //     children: [
+                  //       SignInButton(
+                  //         Buttons.GoogleDark,
+                  //         onPressed: loginWithGoogle,
+                  //       ),
+                  //       const SizedBox(width: 16),
+                  //       IconButton(
+                  //         icon: const Icon(Icons.phone, size: 30, color: Colors.white),
+                  //         onPressed: () => setState(() => _showPhoneField = !_showPhoneField),
+                  //       ),
+                  //     ],
+                  //   ),
+                  //
+                  //   const SizedBox(height: 16),
+                  //
+                  //   if (_showPhoneField) ...[
+                  //     _glassInput("Enter phone (e.g. +357...)", phoneController),
+                  //     const SizedBox(height: 10),
+                  //     if (_codeSent)
+                  //       _glassInput("Enter code", smsCodeController),
+                  //     const SizedBox(height: 10),
+                  //     ElevatedButton.icon(
+                  //       icon: const Icon(Icons.sms),
+                  //       label: Text(_codeSent ? "Verify Code" : "Send SMS Code"),
+                  //       onPressed: _codeSent ? _verifyCode : _sendCode,
+                  //       style: ElevatedButton.styleFrom(
+                  //         backgroundColor: Colors.blueAccent,
+                  //         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  //       ),
+                  //     ),
+                  //   ],
+                  //
+                  //   const SizedBox(height: 20),
+                  //   Row(
+                  //     mainAxisAlignment: MainAxisAlignment.center,
+                  //     children: [
+                  //       const Text("Not a member? ", style: TextStyle(color: Colors.white)),
+                  //       GestureDetector(
+                  //         onTap: () {
+                  //           Navigator.push(context, MaterialPageRoute(builder: (_) => const RegisterPage()));
+                  //         },
+                  //         child: const Text(
+                  //           "Register now",
+                  //           style: TextStyle(fontWeight: FontWeight.bold, color: Colors.purpleAccent),
+                  //         ),
+                  //       ),
+                  //     ],
+                  //   ),
+                  // ],
+              children: [
+                const SizedBox(height: 16),
+
+                const Text(
+                  "Hello Again!",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 6),
+
+                const Text(
+                  "Set it once. Forget the rest.",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.white70,
+                  ),
+                ),
+
+                const SizedBox(height: 32),
+
+                _glassInput("Username or email", emailController),
+                const SizedBox(height: 16),
+                _glassInput("Password", passwordController, isPassword: true),
+
+                const SizedBox(height: 8),
+
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: () {},
+                    child: const Text(
+                      "Recovery password",
+                      style: TextStyle(fontSize: 12, color: Colors.white),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 8),
+
+                ElevatedButton(
+                  onPressed: login,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFC70418),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  ),
+                  child: const Text("Sign in", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                ),
+
+                const SizedBox(height: 24),
+
+                Row(
+                  children: const [
+                    Expanded(child: Divider(color: Colors.white38)),
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 8.0),
+                      child: Text("or continue with", style: TextStyle(color: Colors.white70)),
+                    ),
+                    Expanded(child: Divider(color: Colors.white38)),
+                  ],
+                ),
+
+                const SizedBox(height: 16),
+
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Text(
-                      "Hello Again!",
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 26,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
+                    SignInButton(
+                      Buttons.GoogleDark,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      onPressed: loginWithGoogle,
                     ),
-                    const SizedBox(height: 6),
-                    const Text(
-                      "Welcome back you've been missed!",
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 14, color: Colors.white70),
-                    ),
-                    const SizedBox(height: 24),
-
-                    _glassInput("Enter email", emailController),
-                    const SizedBox(height: 14),
-                    _glassInput("Password", passwordController, isPassword: true),
-
-                    const SizedBox(height: 6),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: TextButton(
-                        onPressed: () {},
-                        child: const Text(
-                          "Recovery Password",
-                          style: TextStyle(fontSize: 12, color: Colors.white),
-                        ),
-                      ),
-                    ),
-
-                    // 🔴 Sign In Button (C70418)
-                    ElevatedButton(
-                      onPressed: login,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFC70418),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                      ),
-                      child: const Text("Sign In", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                    ),
-
-                    const SizedBox(height: 20),
-                    const Center(child: Text("Or continue with", style: TextStyle(color: Colors.white70))),
-                    const SizedBox(height: 12),
-
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        SignInButton(
-                          Buttons.GoogleDark,
-                          onPressed: loginWithGoogle,
-                        ),
-                        const SizedBox(width: 16),
-                        IconButton(
-                          icon: const Icon(Icons.phone, size: 30, color: Colors.white),
-                          onPressed: () => setState(() => _showPhoneField = !_showPhoneField),
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    if (_showPhoneField) ...[
-                      _glassInput("Enter phone (e.g. +357...)", phoneController),
-                      const SizedBox(height: 10),
-                      if (_codeSent)
-                        _glassInput("Enter code", smsCodeController),
-                      const SizedBox(height: 10),
-                      ElevatedButton.icon(
-                        icon: const Icon(Icons.sms),
-                        label: Text(_codeSent ? "Verify Code" : "Send SMS Code"),
-                        onPressed: _codeSent ? _verifyCode : _sendCode,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blueAccent,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                        ),
-                      ),
-                    ],
-
-                    const SizedBox(height: 20),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Text("Not a member? ", style: TextStyle(color: Colors.white)),
-                        GestureDetector(
-                          onTap: () {
-                            Navigator.push(context, MaterialPageRoute(builder: (_) => const RegisterPage()));
-                          },
-                          child: const Text(
-                            "Register now",
-                            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.purpleAccent),
-                          ),
-                        ),
-                      ],
+                    const SizedBox(width: 12),
+                    IconButton(
+                      icon: const Icon(Icons.phone, size: 28, color: Colors.white),
+                      onPressed: () => setState(() => _showPhoneField = !_showPhoneField),
                     ),
                   ],
                 ),
+
+                if (_showPhoneField) ...[
+                  const SizedBox(height: 16),
+                  _glassInput("Enter phone (e.g. +357...)", phoneController),
+                  const SizedBox(height: 10),
+                  if (_codeSent) _glassInput("Enter code", smsCodeController),
+                  const SizedBox(height: 10),
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.sms),
+                    label: Text(_codeSent ? "Verify Code" : "Send SMS Code"),
+                    onPressed: _codeSent ? _verifyCode : _sendCode,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blueAccent,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    ),
+                  ),
+                ],
+
+                const SizedBox(height: 24),
+
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const RegisterPage()));
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white.withOpacity(0.05),
+                      side: const BorderSide(color: Colors.white24),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    child: const Text(
+                      "Create an account",
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+
+
+                // Row(
+                //   mainAxisAlignment: MainAxisAlignment.center,
+                //   children: [
+                //     const Text("Not a member? ", style: TextStyle(color: Colors.white)),
+                //     GestureDetector(
+                //       onTap: () {
+                //         Navigator.push(context, MaterialPageRoute(builder: (_) => const RegisterPage()));
+                //       },
+                //       child: const Text(
+                //         "Register now",
+                //         style: TextStyle(fontWeight: FontWeight.bold, color: Colors.purpleAccent),
+                //       ),
+                //     ),
+                //   ],
+                // ),
+
+                const SizedBox(height: 16),
+              ],
+
+            ),
               ),
             ),
           ),
-        ),
-      ),
-    );
+        );
   }
+
 
   // 🔹 Custom glassy TextField builder
   Widget _glassInput(String hint, TextEditingController controller, {bool isPassword = false}) {

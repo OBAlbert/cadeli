@@ -65,8 +65,14 @@ class _IndexPageState extends State<IndexPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFA1BDC7),
-      body: SafeArea(
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+        Image.asset(
+        'assets/background/fade_base.jpg',
+        fit: BoxFit.cover,
+      ),
+      SafeArea(
         child: Column(
           children: [
             const SizedBox(height: 30),
@@ -79,44 +85,89 @@ class _IndexPageState extends State<IndexPage> {
                 onPageChanged: (index) {
                   setState(() => _currentPage = index);
                 },
-                itemBuilder: (context, index) {
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 5),
-                    child: Column(
-                      children: [
-                        SizedBox(
-                          height: 400,
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(20),
-                            child: Image.asset(
-                              slides[index]['image']!,
-                              fit: BoxFit.cover,
-                              width: double.infinity,
+                // itemBuilder: (context, index) {
+                //   return Padding(
+                //     padding: const EdgeInsets.symmetric(horizontal: 5),
+                //     child: Column(
+                //       children: [
+                //         SizedBox(
+                //           height: 400,
+                //           child: ClipRRect(
+                //             borderRadius: BorderRadius.circular(20),
+                //             child: Image.asset(
+                //               slides[index]['image']!,
+                //               fit: BoxFit.cover,
+                //               width: double.infinity,
+                //             ),
+                //           ),
+                //         ),
+                //         const SizedBox(height: 30),
+                //         Text(
+                //           slides[index]['title']!,
+                //           style: const TextStyle(
+                //             fontSize: 40,
+                //             fontWeight: FontWeight.bold,
+                //             color: Colors.black87,
+                //           ),
+                //         ),
+                //         const SizedBox(height: 8),
+                //         Text(
+                //           slides[index]['subtitle']!,
+                //           textAlign: TextAlign.center,
+                //           style: const TextStyle(
+                //             fontSize: 20,
+                //             color: Colors.black54,
+                //           ),
+                //         ),
+                //       ],
+                //     ),
+                //   );
+                // },item buider old
+                  itemBuilder: (context, index) {
+                    double opacity = index == _currentPage ? 1.0 : 0.4;
+
+                    return AnimatedOpacity(
+                      duration: const Duration(milliseconds: 300),
+                      opacity: opacity,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 5),
+                        child: Column(
+                          children: [
+                            SizedBox(
+                              height: 400,
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(20),
+                                child: Image.asset(
+                                  slides[index]['image']!,
+                                  fit: BoxFit.cover,
+                                  width: double.infinity,
+                                ),
+                              ),
                             ),
-                          ),
+                            const SizedBox(height: 30),
+                            Text(
+                              slides[index]['title']!,
+                              style: const TextStyle(
+                                fontSize: 40,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black87,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              slides[index]['subtitle']!,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                fontSize: 20,
+                                color: Colors.black54,
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 30),
-                        Text(
-                          slides[index]['title']!,
-                          style: const TextStyle(
-                            fontSize: 40,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black87,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          slides[index]['subtitle']!,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            fontSize: 20,
-                            color: Colors.black54,
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
+                      ),
+                    );
+                  }
+
               ),
             ),
 
@@ -143,47 +194,102 @@ class _IndexPageState extends State<IndexPage> {
             const SizedBox(height: 30),
 
             // Login and Register buttons
+            // Padding(
+            //   padding: const EdgeInsets.symmetric(horizontal: 40),
+            //   child: Row(
+            //     children: [
+            //       Expanded(
+            //         child: ElevatedButton(
+            //           onPressed: () {
+            //             Navigator.push(
+            //               context,
+            //               MaterialPageRoute(builder: (_) => const LoginPage()),
+            //             );
+            //           },
+            //           style: ElevatedButton.styleFrom(
+            //             backgroundColor: Colors.blueAccent,
+            //             padding: const EdgeInsets.symmetric(vertical: 14),
+            //             shape: RoundedRectangleBorder(
+            //               borderRadius: BorderRadius.circular(30),
+            //             ),
+            //           ),
+            //           child: const Text("Login"),
+            //         ),
+            //       ),
+            //       const SizedBox(width: 16),
+            //       Expanded(
+            //         child: ElevatedButton(
+            //           onPressed: () {
+            //             Navigator.push(
+            //               context,
+            //               MaterialPageRoute(builder: (_) => const RegisterPage()),
+            //             );
+            //           },
+            //           style: ElevatedButton.styleFrom(
+            //             backgroundColor: Colors.white,
+            //             padding: const EdgeInsets.symmetric(vertical: 14),
+            //             shape: RoundedRectangleBorder(
+            //               borderRadius: BorderRadius.circular(30),
+            //             ),
+            //           ),
+            //           child: const Text(
+            //             "Register",
+            //             style: TextStyle(color: Colors.black87),
+            //           ),
+            //         ),
+            //       ),
+            //     ],
+            //   ),
+            // ), padding
+            // Login and Register buttons
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 40),
-              child: Row(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Column(
                 children: [
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const LoginPage()),
-                        );
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blueAccent,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(30),
-                        ),
+                  ElevatedButton(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const RegisterPage()),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      minimumSize: const Size.fromHeight(55),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
                       ),
-                      child: const Text("Login"),
+                    ),
+                    child: const Text(
+                      "Create an account",
+                      style: TextStyle(
+                        color: Color(0xFF2C3E50),
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const RegisterPage()),
-                        );
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(30),
-                        ),
+                  const SizedBox(height: 12),
+                  OutlinedButton(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const LoginPage()),
+                      );
+                    },
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Colors.white),
+                      minimumSize: const Size.fromHeight(55),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
                       ),
-                      child: const Text(
-                        "Register",
-                        style: TextStyle(color: Colors.black87),
+                    ),
+                    child: const Text(
+                      "Sign in",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
                   ),
@@ -191,10 +297,14 @@ class _IndexPageState extends State<IndexPage> {
               ),
             ),
 
+
             const SizedBox(height: 30),
           ],
         ),
       ),
+        ],
+      )
+
     );
   }
 }
