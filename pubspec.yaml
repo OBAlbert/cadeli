@@ -33,12 +33,12 @@ dependencies:
   firebase_core: ^2.27.0
   firebase_analytics: ^10.8.0
   firebase_auth: ^4.17.4
+  cloud_firestore: ^4.15.8
   provider: ^6.1.1
-  cloud_firestore: ^4.15.8    # If Firestore is used
-  google_fonts: ^6.1.0        # If any text styling
-  font_awesome_flutter: 9.2.0 # Icons
+  google_fonts: ^6.1.0
   google_sign_in: ^6.2.1
-  flutter_signin_button: ^2.0.0
+  flutter_signin_button: ^2.0.0  # Downgraded to avoid conflict
+
 
 
 
