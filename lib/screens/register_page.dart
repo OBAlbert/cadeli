@@ -26,6 +26,9 @@ class _RegisterPageState extends State<RegisterPage> {
   final TextEditingController passwordController = TextEditingController();
   final TextEditingController confirmPasswordController = TextEditingController();
 
+  List<FocusNode> otpFocusNodes = List.generate(6, (_) => FocusNode());
+  List<String> otpValues = List.filled(6, '');
+
   // Firebase Phone Auth
   void sendOtp() async {
     await FirebaseAuth.instance.verifyPhoneNumber(
@@ -102,38 +105,175 @@ class _RegisterPageState extends State<RegisterPage> {
 
   Widget buildStepContent() {
     switch (currentStep) {
+      // case 0:
+      //   return Column(
+      //     crossAxisAlignment: CrossAxisAlignment.start,
+      //     children: [
+      //       const Text("Phone Verification", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+      //       const SizedBox(height: 10),
+      //       _formLabel("Phone Number"),
+      //       _input(phoneController, hint: "+357...", keyboardType: TextInputType.phone),
+      //       if (isCodeSent) ...[
+      //         const SizedBox(height: 12),
+      //         _formLabel("Enter OTP Code"),
+      //         _input(otpController, hint: "6-digit code", keyboardType: TextInputType.number),
+      //       ],
+      //       const SizedBox(height: 20),
+      //       _button(isCodeSent ? "Verify Code" : "Send Code", onPressed: isCodeSent ? verifyOtp : sendOtp),
+      //     ],
+      //   );
       case 0:
         return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            const Text("Phone Verification", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 10),
-            _formLabel("Phone Number"),
-            _input(phoneController, hint: "+357...", keyboardType: TextInputType.phone),
-            if (isCodeSent) ...[
-              const SizedBox(height: 12),
-              _formLabel("Enter OTP Code"),
-              _input(otpController, hint: "6-digit code", keyboardType: TextInputType.number),
-            ],
             const SizedBox(height: 20),
-            _button(isCodeSent ? "Verify Code" : "Send Code", onPressed: isCodeSent ? verifyOtp : sendOtp),
+            // 🔙 Back Button
+            Align(
+              alignment: Alignment.topLeft,
+              child: IconButton(
+                icon: const Icon(Icons.arrow_back, color: Colors.white, size: 28),
+                onPressed: prevStep,
+                style: ButtonStyle(
+                  overlayColor: MaterialStateProperty.all(Colors.transparent),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 10),
+
+            // 🔄 Timeline
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: List.generate(4, (index) {
+                  bool isActive = index == currentStep;
+                  bool isCompleted = index < currentStep;
+
+                  return CircleAvatar(
+                    radius: 18,
+                    backgroundColor: isCompleted
+                        ? Colors.blueGrey
+                        : isActive
+                        ? Colors.blueAccent
+                        : Colors.white.withOpacity(0.7),
+                    child: Text(
+                      '${index + 1}',
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                    ),
+                  );
+                }),
+              ),
+            ),
+
+            const SizedBox(height: 30),
+
+            // 📱 Phone Title
+            const Text("Phone Verification",
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)),
+            const SizedBox(height: 16),
+            _formLabel("Phone Number"),
+
+            // ☎️ Phone Input (styled)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: TextField(
+                controller: phoneController,
+                keyboardType: TextInputType.phone,
+                style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 18),
+                decoration: InputDecoration(
+                  hintText: " e.g (+357 99888777)",
+                  hintStyle: const TextStyle(color: Colors.grey, fontWeight: FontWeight.w600),
+                  filled: true,
+                  fillColor: Colors.white,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+            ),
+
+            if (isCodeSent) ...[
+              const SizedBox(height: 18),
+              _formLabel("Enter OTP Code"),
+              const SizedBox(height: 14),
+              _buildOtpFields(context),
+            ],
+
+
+            const SizedBox(height: 30),
+
+            // 📤 Button
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: _button(
+                isCodeSent ? "Verify Code" : "Send Code",
+                onPressed: isCodeSent ? verifyOtp : sendOtp,
+              ),
+            ),
           ],
         );
+
       case 1:
         return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            const Text("Personal Info", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 10),
+            const SizedBox(height: 20),
+
+            // Timeline bubbles
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: List.generate(4, (index) {
+                  bool isActive = index == currentStep;
+                  bool isCompleted = index < currentStep;
+
+                  return CircleAvatar(
+                    radius: 18,
+                    backgroundColor: isCompleted
+                        ? Colors.blueGrey
+                        : isActive
+                        ? Colors.blueAccent
+                        : Colors.white.withOpacity(0.7),
+                    child: Text(
+                      '${index + 1}',
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                    ),
+                  );
+                }),
+              ),
+            ),
+
+            const SizedBox(height: 30),
+
+            const Text("Personal Info",
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)),
+
+            const SizedBox(height: 16),
             _formLabel("First Name"),
-            _input(nameController, hint: "Enter name"),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: _input(nameController, hint: "Enter name"),
+            ),
             const SizedBox(height: 10),
             _formLabel("Email"),
-            _input(emailController, hint: "Enter email", keyboardType: TextInputType.emailAddress),
-            const SizedBox(height: 20),
-            _button("Save & Continue", onPressed: nextStep),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: _input(emailController, hint: "Enter email", keyboardType: TextInputType.emailAddress),
+            ),
+            const SizedBox(height: 30),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: _button("Save & Continue", onPressed: nextStep),
+            ),
           ],
         );
+
+
+
       case 2:
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -239,4 +379,46 @@ class _RegisterPageState extends State<RegisterPage> {
       ),
     );
   }
+  Widget _buildOtpFields(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      children: List.generate(6, (index) {
+        return SizedBox(
+          width: 40,
+          height: 50,
+          child: TextField(
+            focusNode: otpFocusNodes[index],
+            textAlign: TextAlign.center,
+            keyboardType: TextInputType.number,
+            maxLength: 1,
+            style: const TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Colors.black,
+            ),
+            decoration: InputDecoration(
+              counterText: '',
+              filled: true,
+              fillColor: Colors.white.withOpacity(0.95),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide.none,
+              ),
+            ),
+            onChanged: (value) {
+              otpValues[index] = value;
+              if (value.isNotEmpty && index < 5) {
+                FocusScope.of(context).requestFocus(otpFocusNodes[index + 1]);
+              }
+              otpController.text = otpValues.join();
+            },
+          ),
+        );
+      }),
+    );
+  }
 }
+
+
+
+
