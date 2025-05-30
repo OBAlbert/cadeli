@@ -275,20 +275,61 @@ class _RegisterPageState extends State<RegisterPage> {
 
 
       case 2:
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text("Delivery Address", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 10),
-            _formLabel("Address"),
-            _input(addressController, hint: "Street, Building, etc."),
-            const SizedBox(height: 10),
-            _formLabel("City"),
-            _input(cityController, hint: "City or Area"),
-            const SizedBox(height: 20),
-            _button("Save & Continue", onPressed: nextStep),
-          ],
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const SizedBox(height: 30),
+
+              // 🚚 Page Title
+              const Text(
+                "Delivery Address",
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
+              ),
+              const SizedBox(height: 16),
+
+              // 🏠 Address Input Field (Google Suggest)
+              _formLabel("Address"),
+              _input(addressController, hint: "Start typing your address..."),
+
+              const SizedBox(height: 16),
+
+              // 🗺️ Choose on Map Button
+              ElevatedButton.icon(
+                onPressed: () async {
+                  final picked = await Navigator.pushNamed(context, '/map-picker');
+                  if (picked is String && picked.isNotEmpty) {
+                    setState(() {
+                      addressController.text = picked;
+                    });
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  foregroundColor: Colors.black87,
+                  minimumSize: const Size.fromHeight(48),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+                icon: const Icon(Icons.map),
+                label: const Text("Choose on Map", style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+
+              const SizedBox(height: 24),
+
+              // ✅ Save Button
+              _button("Save & Continue", onPressed: () {
+                if (addressController.text.trim().isEmpty) {
+                  _showError("Please enter your address.");
+                } else {
+                  nextStep();
+                }
+              }),
+            ],
+          ),
         );
+
       case 3:
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,

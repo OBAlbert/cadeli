@@ -10,6 +10,8 @@ import 'screens/main_page.dart';
 import 'screens/verify_email_page.dart';
 import 'screens/start_page.dart';
 import 'screens/index_page.dart';
+import 'screens/pick_location_page.dart';
+
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -42,6 +44,9 @@ class MyApp extends StatelessWidget {
           primaryColor: Colors.blueAccent,
         ),
         home: const StartToIndexRouter(),
+        routes: {
+          '/map-picker': (context) => const PickLocationPage(),
+        },
       ),
     );
   }
