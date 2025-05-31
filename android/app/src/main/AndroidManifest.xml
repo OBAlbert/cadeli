@@ -3,6 +3,12 @@
         android:label="cadeli"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="AIzaSyAu7ww71b2V7TJCIiZqAbtCSrUZuSzz8K8" />
+
+
         <activity
             android:name=".MainActivity"
             android:exported="true"

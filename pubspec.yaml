@@ -35,12 +35,14 @@ dependencies:
   firebase_auth: ^4.17.4
   cloud_firestore: ^4.15.8
   provider: ^6.1.1
-  google_fonts: ^6.1.0
+  google_fonts: ^4.0.4
   google_sign_in: ^6.2.1
   flutter_signin_button: ^2.0.0
   google_maps_flutter: ^2.5.3
   geolocator: ^9.0.2
   geocoding: ^2.0.5
+  google_place: ^0.4.7
+
 
   # Downgraded to avoid conflict
 
