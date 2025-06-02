@@ -110,8 +110,11 @@ class _PickLocationPageState extends State<PickLocationPage> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text('Pick Location', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        centerTitle: true,
+        title: const Padding(
+          padding: EdgeInsets.only(left: 8.0),
+          child: Text('Pick Location', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        ),
+        centerTitle: false,
         foregroundColor: Colors.white,
       ),
       body: Stack(
@@ -120,8 +123,9 @@ class _PickLocationPageState extends State<PickLocationPage> {
           SafeArea(
             child: Column(
               children: [
+                const SizedBox(height: 8),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Row(
                     children: [
                       Expanded(
@@ -136,20 +140,32 @@ class _PickLocationPageState extends State<PickLocationPage> {
                             border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
                             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                           ),
+                          textInputAction: TextInputAction.done,
+                          onSubmitted: (_) => FocusScope.of(context).unfocus(),
                         ),
                       ),
                       const SizedBox(width: 8),
-                      IconButton(
-                        onPressed: _useMyLocation,
-                        icon: const Icon(Icons.my_location, color: Colors.white),
-                      )
+                      SizedBox(
+                        height: 48,
+                        child: ElevatedButton.icon(
+                          onPressed: _useMyLocation,
+                          icon: const Icon(Icons.my_location, size: 18),
+                          label: const Text('Use My Location'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF254573),
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),
                 if (_predictions.isNotEmpty)
                   Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 20),
+                    margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                     decoration: BoxDecoration(color: Colors.white.withOpacity(0.95), borderRadius: BorderRadius.circular(12)),
+                    constraints: const BoxConstraints(maxHeight: 200),
                     child: ListView.builder(
                       shrinkWrap: true,
                       itemCount: _predictions.length,
@@ -157,51 +173,58 @@ class _PickLocationPageState extends State<PickLocationPage> {
                         final p = _predictions[index];
                         return ListTile(
                           title: Text(p.description ?? '', style: const TextStyle(color: Colors.black)),
-                          onTap: () => _selectPrediction(p),
+                          onTap: () {
+                            FocusScope.of(context).unfocus();
+                            _selectPrediction(p);
+                          },
                         );
                       },
                     ),
                   ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 4)],
-                    ),
-                    height: MediaQuery.of(context).size.height * 0.45,
-                    width: double.infinity,
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(16),
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          GoogleMap(
-                            initialCameraPosition: CameraPosition(target: _picked, zoom: 14),
-                            onMapCreated: (controller) => _mapController.complete(controller),
-                            onCameraMove: (position) => _picked = position.target,
-                            onCameraIdle: () => _reverseGeocode(_picked),
-                            myLocationButtonEnabled: false,
-                            myLocationEnabled: false,
-                            zoomGesturesEnabled: true,
-                            zoomControlsEnabled: false,
-                          ),
-                          const Icon(Icons.location_on, size: 56, color: Color(0xFFC70418)), // Highlighted target icon
-                        ],
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 4)],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            GoogleMap(
+                              initialCameraPosition: CameraPosition(target: _picked, zoom: 14),
+                              onMapCreated: (controller) => _mapController.complete(controller),
+                              onCameraMove: (position) => _picked = position.target,
+                              onCameraIdle: () => _reverseGeocode(_picked),
+                              myLocationButtonEnabled: false,
+                              myLocationEnabled: false,
+                              zoomGesturesEnabled: true,
+                              zoomControlsEnabled: false,
+                              onTap: (latLng) {
+                                setState(() => _picked = latLng);
+                                _reverseGeocode(latLng);
+                              },
+                            ),
+                            const Icon(Icons.location_on, size: 40, color: Color(0xFFC70418)),
+                          ],
+                        ),
                       ),
                     ),
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(12),
-                      boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 4)],
+                      boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 4)],
                     ),
                     child: _loading
                         ? const Center(child: CircularProgressIndicator())
@@ -212,7 +235,7 @@ class _PickLocationPageState extends State<PickLocationPage> {
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
                   child: SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
