@@ -1,4 +1,5 @@
 import 'package:cadeli/screens/login_page.dart';
+import 'package:cadeli/screens/pick_location_page.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -156,7 +157,17 @@ class _ProfilePageState extends State<ProfilePage> {
     return Column(
       children: [
         buildSectionItem(Icons.shopping_basket, "Orders"),
-        buildSectionItem(Icons.location_on, "Addresses"),
+        buildSectionItem(Icons.location_on, "Addresses", onTap: () async {
+          final selectedAddress = await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const PickLocationPage()),
+          );
+          if (selectedAddress != null && selectedAddress is String) {
+            setState(() {
+              addressController.text = selectedAddress;
+            });
+          }
+        }),
         buildSectionItem(Icons.favorite_border, "Favorites"),
         buildSectionItem(Icons.star_border, "Ratings"),
         buildSectionItem(Icons.payment, "Payment Methods"),
