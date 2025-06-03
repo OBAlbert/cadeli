@@ -17,7 +17,7 @@ class _ProfilePageState extends State<ProfilePage> {
   final TextEditingController nameController = TextEditingController();
   final TextEditingController addressController = TextEditingController();
   final TextEditingController phoneController = TextEditingController();
-  final TextEditingController bioController = TextEditingController();
+  final TextEditingController notesController = TextEditingController();
 
   bool isLoading = true;
   bool isEditing = false;
@@ -40,7 +40,7 @@ class _ProfilePageState extends State<ProfilePage> {
           'fullName': '',
           'address': '',
           'phone': '',
-          'bio': '',
+          'notes': '',
           'favourites': [],
           'orderHistory': [],
           'activeOrders': [],
@@ -53,7 +53,7 @@ class _ProfilePageState extends State<ProfilePage> {
       nameController.text = userData?['fullName'] ?? '';
       addressController.text = userData?['address'] ?? '';
       phoneController.text = userData?['phone'] ?? '';
-      bioController.text = userData?['bio'] ?? '';
+      notesController.text = userData?['notes'] ?? '';
     } catch (e) {
       print("Error loading profile: $e");
       ScaffoldMessenger.of(context).showSnackBar(
@@ -72,7 +72,7 @@ class _ProfilePageState extends State<ProfilePage> {
         'fullName': nameController.text.trim(),
         'address': addressController.text.trim(),
         'phone': phoneController.text.trim(),
-        'bio': bioController.text.trim(),
+        'notes': notesController.text.trim(),
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -89,35 +89,80 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Widget buildTextField(String label, TextEditingController controller, {int maxLines = 1}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: Colors.black87,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 16),
+          child: Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFFE4EDF2),
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 6)],
+            ),
+            child: TextField(
+              controller: controller,
+              maxLines: maxLines,
+              enabled: isEditing,
+              style: const TextStyle(color: Colors.black, fontWeight: FontWeight.w500),
+              decoration: InputDecoration(
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget sectionTitle(String title) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 15),
-      child: TextField(
-        controller: controller,
-        maxLines: maxLines,
-        enabled: isEditing,
-        style: const TextStyle(color: Colors.white),
-        decoration: InputDecoration(
-          labelText: label,
-          labelStyle: TextStyle(color: Colors.grey[300]),
-          filled: true,
-          fillColor: isEditing ? Colors.grey[850] : Colors.grey[800],
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Text(
+          title,
+          style: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF254573),
+          ),
         ),
       ),
     );
   }
 
-  Widget sectionTitle(String title) {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Text(
-        title,
-        style: const TextStyle(
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
-          color: Colors.white,
-        ),
-      ),
+  Widget buildSectionItem(IconData icon, String title, {VoidCallback? onTap}) {
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+      leading: Icon(icon, color: const Color(0xFF254573)),
+      title: Text(title, style: const TextStyle(color: Colors.black)),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: onTap ?? () {},
+    );
+  }
+
+  Widget buildQuickLinks() {
+    return Column(
+      children: [
+        buildSectionItem(Icons.shopping_basket, "Orders"),
+        buildSectionItem(Icons.location_on, "Addresses"),
+        buildSectionItem(Icons.favorite_border, "Favorites"),
+        buildSectionItem(Icons.star_border, "Ratings"),
+        buildSectionItem(Icons.payment, "Payment Methods"),
+        buildSectionItem(Icons.info_outline, "About Cadeli"),
+        buildSectionItem(Icons.contact_mail, "Contact"),
+      ],
     );
   }
 
@@ -126,7 +171,6 @@ class _ProfilePageState extends State<ProfilePage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         sectionTitle("Favourites"),
-        const SizedBox(height: 10),
         SizedBox(
           height: 100,
           child: ListView.builder(
@@ -136,11 +180,12 @@ class _ProfilePageState extends State<ProfilePage> {
               width: 100,
               margin: const EdgeInsets.only(right: 10),
               decoration: BoxDecoration(
-                color: Colors.grey[800],
-                borderRadius: BorderRadius.circular(10),
+                color: const Color(0xFF97CFE6),
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 4)],
               ),
               child: const Center(
-                child: Text("Item", style: TextStyle(color:Color(0xFF060606))),
+                child: Text("Item", style: TextStyle(color: Colors.black)),
               ),
             ),
           ),
@@ -156,19 +201,19 @@ class _ProfilePageState extends State<ProfilePage> {
         sectionTitle("Order Summary"),
         const SizedBox(height: 10),
         ListTile(
-          leading: const Icon(Icons.shopping_bag, color: Colors.grey),
-          title: const Text("Order History", style: TextStyle(color: Color(0xFF060606))),
+          leading: const Icon(Icons.shopping_bag, color: Color(0xFF254573)),
+          title: const Text("Order History", style: TextStyle(color: Colors.black)),
           subtitle: Text(
             "${userData?['orderHistory']?.length ?? 0} orders",
-            style: const TextStyle(color: Colors.black26),
+            style: const TextStyle(color: Colors.grey),
           ),
         ),
         ListTile(
-          leading: const Icon(Icons.local_shipping, color: Colors.grey),
-          title: const Text("Active Orders", style: TextStyle(color: Color(0xFF060606))),
+          leading: const Icon(Icons.local_shipping, color: Color(0xFF254573)),
+          title: const Text("Active Orders", style: TextStyle(color: Colors.black)),
           subtitle: Text(
             "${userData?['activeOrders']?.length ?? 0} in progress",
-            style: const TextStyle(color: Colors.black26),
+            style: const TextStyle(color: Colors.grey),
           ),
         ),
       ],
@@ -181,15 +226,19 @@ class _ProfilePageState extends State<ProfilePage> {
       return const Center(child: CircularProgressIndicator());
     }
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              IconButton(
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("Profile", style: TextStyle(fontWeight: FontWeight.bold)),
+        backgroundColor: const Color(0xFF254573),
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Align(
+              alignment: Alignment.topRight,
+              child: IconButton(
                 icon: const Icon(Icons.logout, color: Colors.grey),
                 onPressed: () async {
                   await FirebaseAuth.instance.signOut();
@@ -198,47 +247,54 @@ class _ProfilePageState extends State<ProfilePage> {
                     MaterialPageRoute(builder: (_) => const LoginPage()),
                   );
                 },
-              )
-            ],
-          ),
+              ),
+            ),
+            const CircleAvatar(
+              radius: 40,
+              backgroundColor: Colors.purple,
+              child: Icon(Icons.person, size: 40, color: Colors.white),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              user.email ?? "No email",
+              style: const TextStyle(color: Colors.black54),
+            ),
+            const SizedBox(height: 20),
 
-          const CircleAvatar(
-            radius: 40,
-            backgroundColor: Colors.purple,
-            child: Icon(Icons.person, size: 40, color: Colors.white),
-          ),
-          const SizedBox(height: 15),
+            buildTextField("Full Name", nameController),
+            buildTextField("Phone", phoneController),
+            buildTextField("Address", addressController),
+            buildTextField("Delivery Notes", notesController, maxLines: 2),
+            const SizedBox(height: 10),
 
-          Text(
-            user.email ?? "No email",
-            style: TextStyle(color: Colors.grey[300]),
-          ),
-          const SizedBox(height: 20),
-
-          buildTextField("Full Name", nameController),
-          buildTextField("Phone", phoneController),
-          buildTextField("Address", addressController),
-          buildTextField("Bio", bioController, maxLines: 2),
-
-          const SizedBox(height: 10),
-
-          ElevatedButton.icon(
-            icon: Icon(isEditing ? Icons.save : Icons.edit),
-            label: Text(isEditing ? "Save" : "Edit Profile"),
-            onPressed: () {
-              if (isEditing) {
-                saveProfile();
-              } else {
-                setState(() => isEditing = true);
-              }
-            },
-          ),
-
-          const SizedBox(height: 30),
-          buildFavouritesSection(),
-          const SizedBox(height: 30),
-          buildOrderSummary(),
-        ],
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                icon: Icon(isEditing ? Icons.save : Icons.edit),
+                label: Text(isEditing ? "Save" : "Edit Profile"),
+                onPressed: () {
+                  if (isEditing) {
+                    saveProfile();
+                  } else {
+                    setState(() => isEditing = true);
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFC70418),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                ),
+              ),
+            ),
+            const SizedBox(height: 30),
+            buildFavouritesSection(),
+            const SizedBox(height: 30),
+            buildOrderSummary(),
+            const SizedBox(height: 30),
+            buildQuickLinks(),
+          ],
+        ),
       ),
     );
   }
