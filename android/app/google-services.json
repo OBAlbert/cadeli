@@ -7,27 +7,35 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:220210285911:android:12db23145bc0bf1add4212",
+        "mobilesdk_app_id": "1:220210285911:android:0625e9e59c7df70ddd4212",
         "android_client_info": {
-          "package_name": "com.example.cadeli"
+          "package_name": "com.cadeli.waters"
         }
       },
       "oauth_client": [
         {
-          "client_id": "220210285911-artjo76dvi0ibcna9i35c4serj7cikp2.apps.googleusercontent.com",
+          "client_id": "220210285911-nb97bmpco0knsmmndtp0b3e4ckt6kfn2.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.cadeli.waters",
+            "certificate_hash": "ec631ad3926c684de1b5b9d5feeedf4c818905ce"
+          }
+        },
+        {
+          "client_id": "220210285911-c99b9hgagh9h2m3h3m7r92gh1rb83bqj.apps.googleusercontent.com",
           "client_type": 3
         }
       ],
       "api_key": [
         {
-          "current_key": "AIzaSyAu7ww71b2V7TJCIiZqAbtCSrUZuSzz8K8"
+          "current_key": "AIzaSyA-L-Lj31tF8h4Z0Jf1htyPKcj71bKjHm0"
         }
       ],
       "services": {
         "appinvite_service": {
           "other_platform_oauth_client": [
             {
-              "client_id": "220210285911-artjo76dvi0ibcna9i35c4serj7cikp2.apps.googleusercontent.com",
+              "client_id": "220210285911-c99b9hgagh9h2m3h3m7r92gh1rb83bqj.apps.googleusercontent.com",
               "client_type": 3
             }
           ]

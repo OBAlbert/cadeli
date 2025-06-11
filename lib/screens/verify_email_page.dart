@@ -1,7 +1,7 @@
 import 'dart:async';
-
-import 'package:firebase_auth/firebase_auth.dart';
+import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'main_page.dart';
 
 class VerifyEmailPage extends StatefulWidget {
@@ -64,44 +64,58 @@ class _VerifyEmailPageState extends State<VerifyEmailPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFA1BDC7),
-      appBar: AppBar(
-        title: const Text('Verify Your Email'),
-        backgroundColor: Colors.black87,
-      ),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.email_outlined, size: 60),
-              const SizedBox(height: 20),
-              const Text(
-                "A verification link has been sent to your email.\nPlease verify to continue.",
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 16),
-              ),
-              const SizedBox(height: 20),
-              ElevatedButton.icon(
-                onPressed: _sendVerificationEmail,
-                icon: const Icon(Icons.send),
-                label: const Text("Resend Verification Email"),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blueAccent,
-                ),
-              ),
-              if (_errorOccurred)
-                const Padding(
-                  padding: EdgeInsets.only(top: 12),
-                  child: Text(
-                    "Could not send email. Check connection.",
-                    style: TextStyle(color: Colors.red),
-                  ),
-                ),
-            ],
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          Image.asset(
+            'assets/background/fade_base.jpg',
+            fit: BoxFit.cover,
           ),
-        ),
+          BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+            child: Container(
+              color: Colors.black.withOpacity(0.2),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 60),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.email_outlined, size: 80, color: Colors.white),
+                  const SizedBox(height: 20),
+                  const Text(
+                    "Verify Your Email",
+                    style: TextStyle(fontSize: 26, color: Colors.white, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    "We've sent a verification link to your email.\nPlease confirm to access your account.",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.white70),
+                  ),
+                  const SizedBox(height: 24),
+                  ElevatedButton.icon(
+                    onPressed: _sendVerificationEmail,
+                    icon: const Icon(Icons.refresh, color: Colors.white),
+                    label: const Text("Resend Email", style: TextStyle(color: Colors.white)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.redAccent,
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    ),
+                  ),
+                  if (_errorOccurred)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 16),
+                      child: Text(
+                        "Could not send email. Please check your connection.",
+                        style: TextStyle(color: Colors.redAccent),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

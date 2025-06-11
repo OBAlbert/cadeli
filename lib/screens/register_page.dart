@@ -1,6 +1,8 @@
 import 'dart:ui';
 import 'package:cadeli/screens/main_page.dart';
+import 'package:cadeli/screens/verify_email_page.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 // or wherever your MainPage is located
@@ -67,21 +69,38 @@ class _RegisterPageState extends State<RegisterPage> {
     }
 
     try {
+      await FirebaseAuth.instance.signOut();
+
       final userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
         email: emailController.text.trim(),
         password: passwordController.text.trim(),
       );
 
       await FirebaseFirestore.instance.collection('users').doc(userCredential.user!.uid).set({
-        'name': nameController.text.trim(),
+        'fullName': nameController.text.trim(),
         'email': emailController.text.trim(),
         'phone': phoneController.text.trim(),
         'address': addressController.text.trim(),
-        'city': cityController.text.trim(),
+        'notes': '',
+        'bio': '',
+        'favourites': [],
+        'orderHistory': [],
+        'activeOrders': [],
         'createdAt': Timestamp.now(),
       });
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userCredential.user!.uid)
+          .collection('addresses')
+          .add({
+        'label': addressController.text.trim(),
+        'isDefault': true,
+        'timestamp': Timestamp.now(),
+      });
 
-      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const MainPage()));
+
+
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const VerifyEmailPage()));
     } catch (e) {
       _showError("Account creation failed: ${e.toString()}");
     }
@@ -105,23 +124,6 @@ class _RegisterPageState extends State<RegisterPage> {
 
   Widget buildStepContent() {
     switch (currentStep) {
-      // case 0:
-      //   return Column(
-      //     crossAxisAlignment: CrossAxisAlignment.start,
-      //     children: [
-      //       const Text("Phone Verification", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-      //       const SizedBox(height: 10),
-      //       _formLabel("Phone Number"),
-      //       _input(phoneController, hint: "+357...", keyboardType: TextInputType.phone),
-      //       if (isCodeSent) ...[
-      //         const SizedBox(height: 12),
-      //         _formLabel("Enter OTP Code"),
-      //         _input(otpController, hint: "6-digit code", keyboardType: TextInputType.number),
-      //       ],
-      //       const SizedBox(height: 20),
-      //       _button(isCodeSent ? "Verify Code" : "Send Code", onPressed: isCodeSent ? verifyOtp : sendOtp),
-      //     ],
-      //   );
       case 0:
         return Column(
           crossAxisAlignment: CrossAxisAlignment.center,
@@ -133,6 +135,7 @@ class _RegisterPageState extends State<RegisterPage> {
               child: IconButton(
                 icon: const Icon(Icons.arrow_back, color: Colors.white, size: 28),
                 onPressed: prevStep,
+                tooltip: "Back to index",
                 style: ButtonStyle(
                   overlayColor: MaterialStateProperty.all(Colors.transparent),
                 ),
@@ -213,14 +216,26 @@ class _RegisterPageState extends State<RegisterPage> {
                 onPressed: isCodeSent ? verifyOtp : sendOtp,
               ),
             ),
+            _loginRedirect(),
           ],
+
         );
 
       case 1:
         return Column(
+
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             const SizedBox(height: 20),
+            Align(
+              alignment: Alignment.topLeft,
+              child: IconButton(
+                icon: const Icon(Icons.arrow_back, color: Colors.white),
+                onPressed: prevStep,
+                tooltip: "Back to previous step",
+              ),
+            ),
+
 
             // Timeline bubbles
             Padding(
@@ -269,6 +284,7 @@ class _RegisterPageState extends State<RegisterPage> {
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: _button("Save & Continue", onPressed: nextStep),
             ),
+            _loginRedirect(),
           ],
         );
 
@@ -281,6 +297,15 @@ class _RegisterPageState extends State<RegisterPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
+              Align(
+                alignment: Alignment.topLeft,
+                child: IconButton(
+                  icon: const Icon(Icons.arrow_back, color: Colors.white),
+                  onPressed: prevStep,
+                  tooltip: "Previous step",
+                ),
+              ),
+
               const SizedBox(height: 30),
 
               // 🚚 Page Title
@@ -326,6 +351,7 @@ class _RegisterPageState extends State<RegisterPage> {
                   nextStep();
                 }
               }),
+              _loginRedirect(),
             ],
           ),
         );
@@ -334,6 +360,15 @@ class _RegisterPageState extends State<RegisterPage> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Align(
+              alignment: Alignment.topLeft,
+              child: IconButton(
+                icon: const Icon(Icons.arrow_back, color: Colors.white),
+                onPressed: prevStep,
+                tooltip: "Previous step",
+              ),
+            ),
+
             const Text("Create Password", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
             const SizedBox(height: 10),
             _formLabel("Password"),
@@ -343,6 +378,7 @@ class _RegisterPageState extends State<RegisterPage> {
             _input(confirmPasswordController, hint: "Repeat password", obscure: true),
             const SizedBox(height: 20),
             _button("Create Account", onPressed: createAccount),
+            _loginRedirect(),
           ],
         );
       default:
@@ -378,12 +414,29 @@ class _RegisterPageState extends State<RegisterPage> {
       onPressed: onPressed,
       style: ElevatedButton.styleFrom(
         backgroundColor: const Color(0xFFC70418),
+        foregroundColor: Colors.white,
         minimumSize: const Size.fromHeight(48),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
       child: Text(text, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
     );
   }
+
+  Widget _loginRedirect() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 24),
+      child: Center(
+        child: GestureDetector(
+          onTap: () => Navigator.pushReplacementNamed(context, '/login'),
+          child: const Text(
+            "Already have an account? Sign in",
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          ),
+        ),
+      ),
+    );
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -420,6 +473,7 @@ class _RegisterPageState extends State<RegisterPage> {
       ),
     );
   }
+
   Widget _buildOtpFields(BuildContext context) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,

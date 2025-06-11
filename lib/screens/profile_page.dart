@@ -1,5 +1,10 @@
 import 'package:cadeli/screens/login_page.dart';
-import 'package:cadeli/screens/pick_location_page.dart';
+import 'package:cadeli/screens/orders_page.dart';
+import 'package:cadeli/screens/addresses_page.dart';
+import 'package:cadeli/screens/favorites_page.dart';
+import 'package:cadeli/screens/ratings_page.dart';
+import 'package:cadeli/screens/payment_methods_page.dart';
+import 'package:cadeli/screens/contact_page.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -16,12 +21,15 @@ class _ProfilePageState extends State<ProfilePage> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   final TextEditingController nameController = TextEditingController();
-  final TextEditingController addressController = TextEditingController();
   final TextEditingController phoneController = TextEditingController();
   final TextEditingController notesController = TextEditingController();
+  final TextEditingController oldPasswordController = TextEditingController();
+  final TextEditingController newPasswordController = TextEditingController();
+  final TextEditingController confirmPasswordController = TextEditingController();
 
   bool isLoading = true;
   bool isEditing = false;
+  bool showPasswordSection = false;
   Map<String, dynamic>? userData;
 
   @override
@@ -36,23 +44,36 @@ class _ProfilePageState extends State<ProfilePage> {
       final doc = await docRef.get();
 
       if (!doc.exists) {
+        // Fresh schema for new user
         await docRef.set({
           'email': user.email ?? '',
-          'fullName': '',
-          'address': '',
-          'phone': '',
+          'name': user.displayName,
+          'phone': user.phoneNumber,
           'notes': '',
           'favourites': [],
           'orderHistory': [],
           'activeOrders': [],
           'createdAt': Timestamp.now(),
         });
+      } else {
+        // If document exists but missing fields, patch it
+        final existingData = doc.data()!;
+        final Map<String, dynamic> patchedData = {
+          'email': existingData['email'] ?? user.email ?? '',
+          'fullName': existingData['fullName'] ?? '',
+          'phone': existingData['phone'] ?? '',
+          'notes': existingData['notes'] ?? '',
+          'favourites': existingData['favourites'] ?? [],
+          'orderHistory': existingData['orderHistory'] ?? [],
+          'activeOrders': existingData['activeOrders'] ?? [],
+          'createdAt': existingData['createdAt'] ?? Timestamp.now(),
+        };
+        await docRef.update(patchedData);
       }
 
       userData = (await docRef.get()).data();
 
-      nameController.text = userData?['fullName'] ?? '';
-      addressController.text = userData?['address'] ?? '';
+      nameController.text = userData?['name'] ?? '';
       phoneController.text = userData?['phone'] ?? '';
       notesController.text = userData?['notes'] ?? '';
     } catch (e) {
@@ -67,11 +88,11 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
+
   Future<void> saveProfile() async {
     try {
       await _firestore.collection('users').doc(user.uid).update({
         'fullName': nameController.text.trim(),
-        'address': addressController.text.trim(),
         'phone': phoneController.text.trim(),
         'notes': notesController.text.trim(),
       });
@@ -89,36 +110,57 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
+  Future<void> changePassword() async {
+    final oldPass = oldPasswordController.text.trim();
+    final newPass = newPasswordController.text.trim();
+    final confirmPass = confirmPasswordController.text.trim();
+
+    if (newPass != confirmPass) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Passwords do not match")),
+      );
+      return;
+    }
+
+    try {
+      final cred = EmailAuthProvider.credential(email: user.email!, password: oldPass);
+      await user.reauthenticateWithCredential(cred);
+      await user.updatePassword(newPass);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Password changed successfully")),
+      );
+      setState(() => showPasswordSection = false);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error: ${e.toString()}")),
+      );
+    }
+  }
+
   Widget buildTextField(String label, TextEditingController controller, {int maxLines = 1}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: Colors.black87,
+        Text(label, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
+        const SizedBox(height: 4),
+        Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFFE4EDF2),
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 6)],
           ),
-        ),
-        const SizedBox(height: 6),
-        Padding(
-          padding: const EdgeInsets.only(bottom: 16),
-          child: Container(
-            decoration: BoxDecoration(
-              color: const Color(0xFFE4EDF2),
-              borderRadius: BorderRadius.circular(14),
-              boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 6)],
+          margin: const EdgeInsets.only(bottom: 16),
+          child: TextField(
+            controller: controller,
+            maxLines: maxLines,
+            enabled: isEditing,
+            style: const TextStyle(               // 👈 ADD THIS
+              color: Colors.black,                // or any color that contrasts well
+              fontSize: 16,
             ),
-            child: TextField(
-              controller: controller,
-              maxLines: maxLines,
-              enabled: isEditing,
-              style: const TextStyle(color: Colors.black, fontWeight: FontWeight.w500),
-              decoration: InputDecoration(
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              ),
+            decoration: InputDecoration(
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             ),
           ),
         ),
@@ -126,62 +168,12 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  Widget sectionTitle(String title) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: Text(
-          title,
-          style: const TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF254573),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget buildSectionItem(IconData icon, String title, {VoidCallback? onTap}) {
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 4),
-      leading: Icon(icon, color: const Color(0xFF254573)),
-      title: Text(title, style: const TextStyle(color: Colors.black)),
-      trailing: const Icon(Icons.chevron_right),
-      onTap: onTap ?? () {},
-    );
-  }
-
-  Widget buildQuickLinks() {
-    return Column(
-      children: [
-        buildSectionItem(Icons.shopping_basket, "Orders"),
-        buildSectionItem(Icons.location_on, "Addresses", onTap: () async {
-          final selectedAddress = await Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const PickLocationPage()),
-          );
-          if (selectedAddress != null && selectedAddress is String) {
-            setState(() {
-              addressController.text = selectedAddress;
-            });
-          }
-        }),
-        buildSectionItem(Icons.favorite_border, "Favorites"),
-        buildSectionItem(Icons.star_border, "Ratings"),
-        buildSectionItem(Icons.payment, "Payment Methods"),
-        buildSectionItem(Icons.info_outline, "About Cadeli"),
-        buildSectionItem(Icons.contact_mail, "Contact"),
-      ],
-    );
-  }
-
-  Widget buildFavouritesSection() {
+  Widget buildFavourites() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        sectionTitle("Favourites"),
+        const Text("Favourites", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        const SizedBox(height: 10),
         SizedBox(
           height: 100,
           child: ListView.builder(
@@ -195,47 +187,43 @@ class _ProfilePageState extends State<ProfilePage> {
                 borderRadius: BorderRadius.circular(12),
                 boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 4)],
               ),
-              child: const Center(
-                child: Text("Item", style: TextStyle(color: Colors.black)),
-              ),
+              child: const Center(child: Text("Item", style: TextStyle(color: Colors.black))),
             ),
           ),
-        ),
+        )
       ],
     );
   }
 
-  Widget buildOrderSummary() {
+  Widget buildQuickLinks() {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        sectionTitle("Order Summary"),
-        const SizedBox(height: 10),
-        ListTile(
-          leading: const Icon(Icons.shopping_bag, color: Color(0xFF254573)),
-          title: const Text("Order History", style: TextStyle(color: Colors.black)),
-          subtitle: Text(
-            "${userData?['orderHistory']?.length ?? 0} orders",
-            style: const TextStyle(color: Colors.grey),
-          ),
-        ),
-        ListTile(
-          leading: const Icon(Icons.local_shipping, color: Color(0xFF254573)),
-          title: const Text("Active Orders", style: TextStyle(color: Colors.black)),
-          subtitle: Text(
-            "${userData?['activeOrders']?.length ?? 0} in progress",
-            style: const TextStyle(color: Colors.grey),
-          ),
-        ),
+        buildTile(Icons.shopping_basket, "Orders", () => Navigator.push(context, MaterialPageRoute(builder: (_) => const OrdersPage()))),
+        buildTile(Icons.location_on, "Addresses", () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AddressesPage()))),
+        buildTile(Icons.favorite_border, "Favorites", () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FavoritesPage()))),
+        buildTile(Icons.star_border, "Ratings", () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RatingsPage()))),
+        buildTile(Icons.payment, "Payment Methods", () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PaymentMethodsPage()))),
+        buildTile(Icons.info_outline, "About Cadeli"),
+        buildTile(Icons.contact_mail, "Contact", () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ContactPage()))),
       ],
+    );
+  }
+
+  Widget buildTile(IconData icon, String text, [VoidCallback? onTap]) {
+    return ListTile(
+      leading: Icon(icon, color: const Color(0xFF254573)),
+      title: Text(text),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: onTap,
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    if (isLoading) {
-      return const Center(child: CircularProgressIndicator());
+    if (isLoading || userData == null) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
+
 
     return Scaffold(
       appBar: AppBar(
@@ -245,7 +233,7 @@ class _ProfilePageState extends State<ProfilePage> {
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Align(
               alignment: Alignment.topRight,
@@ -253,31 +241,30 @@ class _ProfilePageState extends State<ProfilePage> {
                 icon: const Icon(Icons.logout, color: Colors.grey),
                 onPressed: () async {
                   await FirebaseAuth.instance.signOut();
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(builder: (_) => const LoginPage()),
-                  );
+                  Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginPage()));
                 },
               ),
             ),
-            const CircleAvatar(
-              radius: 40,
-              backgroundColor: Colors.purple,
-              child: Icon(Icons.person, size: 40, color: Colors.white),
+            const Center(
+              child: Column(
+                children: [
+                  CircleAvatar(
+                    radius: 40,
+                    backgroundColor: Colors.purple,
+                    child: Icon(Icons.person, size: 40, color: Colors.white),
+                  ),
+                  SizedBox(height: 10),
+                ],
+              ),
             ),
-            const SizedBox(height: 10),
-            Text(
-              user.email ?? "No email",
-              style: const TextStyle(color: Colors.black54),
+            Center(
+              child: Text(user.email ?? "No email", style: const TextStyle(color: Colors.black54)),
             ),
             const SizedBox(height: 20),
-
             buildTextField("Full Name", nameController),
             buildTextField("Phone", phoneController),
-            buildTextField("Address", addressController),
             buildTextField("Delivery Notes", notesController, maxLines: 2),
-            const SizedBox(height: 10),
-
+            const SizedBox(height: 12),
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
@@ -298,12 +285,37 @@ class _ProfilePageState extends State<ProfilePage> {
                 ),
               ),
             ),
+            const SizedBox(height: 16),
+            TextButton(
+              onPressed: () => setState(() => showPasswordSection = !showPasswordSection),
+              child: Text(
+                showPasswordSection ? "Hide Password Section" : "Change Password",
+                style: const TextStyle(color: Color(0xFF254573), fontWeight: FontWeight.w600),
+              ),
+            ),
+            if (showPasswordSection)
+              Column(
+                children: [
+                  buildTextField("Old Password", oldPasswordController),
+                  buildTextField("New Password", newPasswordController),
+                  buildTextField("Confirm New Password", confirmPasswordController),
+                  const SizedBox(height: 10),
+                  ElevatedButton(
+                    onPressed: changePassword,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF254573),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    ),
+                    child: const Text("Update Password"),
+                  )
+                ],
+              ),
             const SizedBox(height: 30),
-            buildFavouritesSection(),
-            const SizedBox(height: 30),
-            buildOrderSummary(),
+            buildFavourites(),
             const SizedBox(height: 30),
             buildQuickLinks(),
+
           ],
         ),
       ),

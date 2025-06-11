@@ -1,3 +1,5 @@
+//import 'package:cadeli/screens/admin_page.dart';
+import 'package:cadeli/screens/register_page.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -44,8 +46,13 @@ class MyApp extends StatelessWidget {
           primaryColor: Colors.blueAccent,
         ),
         home: const StartToIndexRouter(),
+        //home: const AdminPage(),
+        //const StartToIndexRouter(),
         routes: {
           '/map-picker': (context) => const PickLocationPage(),
+          '/login': (context) => const LoginPage(),
+          '/register': (context) => const RegisterPage(),
+          '/verify': (context) => const VerifyEmailPage(),
         },
       ),
     );

@@ -42,6 +42,8 @@ dependencies:
   geolocator: ^9.0.2
   geocoding: ^2.0.5
   google_place: ^0.4.7
+  intl: ^0.18.0
+  flutter_inset_box_shadow: ^1.0.8
 
 
   # Downgraded to avoid conflict
@@ -93,6 +95,7 @@ flutter:
     - assets/index/index3.jpg
     - assets/index/index4.jpg
     - assets/background/fade_base.jpg
+    - assets/icons/google_icon.png
   #   - images/a_dot_burr.jpeg
   #   - images/a_dot_ham.jpeg
 

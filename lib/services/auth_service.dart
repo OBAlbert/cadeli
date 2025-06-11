@@ -44,16 +44,18 @@ class AuthService {
 
         if (!doc.exists) {
           await docRef.set({
-            'email': email,
             'fullName': '',
-            'address': '',
+            'email': email,
             'phone': '',
+            'address': '',
+            'notes': '',
             'bio': '',
             'favourites': [],
             'orderHistory': [],
             'activeOrders': [],
             'createdAt': Timestamp.now(),
           });
+
           print("User data saved to Firestore");
         } else {
           print("User doc already exists");
