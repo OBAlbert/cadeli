@@ -1,11 +1,9 @@
 import 'dart:ui';
-import 'package:cadeli/screens/main_page.dart';
-import 'package:cadeli/screens/verify_email_page.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-// or wherever your MainPage is located
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cadeli/screens/main_page.dart';
+import 'package:cadeli/screens/verify_email_page.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -19,64 +17,58 @@ class _RegisterPageState extends State<RegisterPage> {
   bool isCodeSent = false;
   String? verificationId;
 
-  final TextEditingController phoneController = TextEditingController();
-  final TextEditingController otpController = TextEditingController();
-  final TextEditingController nameController = TextEditingController();
-  final TextEditingController emailController = TextEditingController();
-  final TextEditingController addressController = TextEditingController();
-  final TextEditingController cityController = TextEditingController();
-  final TextEditingController passwordController = TextEditingController();
-  final TextEditingController confirmPasswordController = TextEditingController();
+  final phoneController = TextEditingController();
+  final otpController = TextEditingController();
+  final nameController = TextEditingController();
+  final emailController = TextEditingController();
+  final addressController = TextEditingController();
+  final passwordController = TextEditingController();
+  final confirmPasswordController = TextEditingController();
 
-  List<FocusNode> otpFocusNodes = List.generate(6, (_) => FocusNode());
-  List<String> otpValues = List.filled(6, '');
+  final otpFocusNodes = List.generate(6, (_) => FocusNode());
+  final otpValues = List.filled(6, '');
 
-  // Firebase Phone Auth
+  // ─────────────────────────────────────────
+  // PHONE AUTH & FIRESTORE LOGIC (unchanged)
   void sendOtp() async {
     await FirebaseAuth.instance.verifyPhoneNumber(
       phoneNumber: phoneController.text.trim(),
       verificationCompleted: (_) {},
-      verificationFailed: (e) {
-        _showError("Verification failed: ${e.message}");
-      },
-      codeSent: (id, _) {
-        setState(() {
-          verificationId = id;
-          isCodeSent = true;
-        });
-      },
+      verificationFailed: (e) => _showError("Verification failed: ${e.message}"),
+      codeSent: (id, _) => setState(() {
+        verificationId = id;
+        isCodeSent = true;
+      }),
       codeAutoRetrievalTimeout: (id) => verificationId = id,
     );
   }
 
   void verifyOtp() async {
     try {
-      final credential = PhoneAuthProvider.credential(
+      final cred = PhoneAuthProvider.credential(
         verificationId: verificationId!,
         smsCode: otpController.text.trim(),
       );
-      await FirebaseAuth.instance.signInWithCredential(credential);
-      nextStep(); // Proceed
-    } catch (e) {
+      await FirebaseAuth.instance.signInWithCredential(cred);
+      nextStep();
+    } catch (_) {
       _showError("Invalid OTP.");
     }
   }
 
   void createAccount() async {
     if (passwordController.text != confirmPasswordController.text) {
-      _showError("Passwords do not match.");
-      return;
+      return _showError("Passwords do not match.");
     }
-
     try {
       await FirebaseAuth.instance.signOut();
-
-      final userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+      final uc = await FirebaseAuth.instance
+          .createUserWithEmailAndPassword(
         email: emailController.text.trim(),
         password: passwordController.text.trim(),
       );
-
-      await FirebaseFirestore.instance.collection('users').doc(userCredential.user!.uid).set({
+      final uid = uc.user!.uid;
+      await FirebaseFirestore.instance.collection('users').doc(uid).set({
         'fullName': nameController.text.trim(),
         'email': emailController.text.trim(),
         'phone': phoneController.text.trim(),
@@ -90,17 +82,17 @@ class _RegisterPageState extends State<RegisterPage> {
       });
       await FirebaseFirestore.instance
           .collection('users')
-          .doc(userCredential.user!.uid)
+          .doc(uid)
           .collection('addresses')
           .add({
         'label': addressController.text.trim(),
         'isDefault': true,
         'timestamp': Timestamp.now(),
       });
-
-
-
-      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const VerifyEmailPage()));
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const VerifyEmailPage()),
+      );
     } catch (e) {
       _showError("Account creation failed: ${e.toString()}");
     }
@@ -111,247 +103,269 @@ class _RegisterPageState extends State<RegisterPage> {
   }
 
   void nextStep() {
-    if (currentStep < 3) {
-      setState(() => currentStep++);
-    }
+    if (currentStep < 3) setState(() => currentStep++);
   }
 
   void prevStep() {
-    if (currentStep > 0) {
-      setState(() => currentStep--);
-    }
+    if (currentStep > 0) setState(() => currentStep--);
+  }
+  // ─────────────────────────────────────────
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Stack(fit: StackFit.expand, children: [
+        // background blur
+        Image.asset("assets/background/fade_base.jpg", fit: BoxFit.cover),
+        BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+          child: Container(
+            color: Colors.black.withOpacity(0.2),
+            child: Column(
+              children: [
+                // ───── SCROLLABLE CONTENT ─────
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.zero,
+                    child: buildStepContent(),
+                  ),
+                ),
+
+                // ───── FIXED BOTTOM BAR ─────
+                Container(
+                  padding:
+                  const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  color: Colors.transparent,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Primary Action Button
+                      SizedBox(
+                        width: double.infinity,
+                        height: 60,
+                        child: ElevatedButton(
+                          onPressed: () {
+                            if (currentStep == 0) {
+                              isCodeSent ? verifyOtp() : sendOtp();
+                            } else if (currentStep < 3) {
+                              nextStep();
+                            } else {
+                              createAccount();
+                            }
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFC70418),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                          child: Text(
+                            currentStep == 0
+                                ? (isCodeSent ? "Verify Code" : "Send Code")
+                                : (currentStep < 3
+                                ? "Save & Continue"
+                                : "Create Account"),
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      // Sign-In Redirect
+                      GestureDetector(
+                        onTap: () =>
+                            Navigator.pushReplacementNamed(context, '/login'),
+                        child: const Text(
+                          "Already have an account? Sign in",
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // ───────────────────────────────
+              ],
+            ),
+          ),
+        ),
+      ]),
+    );
   }
 
+  /// Builds the content for each step (no more “timeline” bubbles)
   Widget buildStepContent() {
     switch (currentStep) {
       case 0:
         return Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SizedBox(height: 20),
-            // 🔙 Back Button
-            Align(
-              alignment: Alignment.topLeft,
-              child: IconButton(
-                icon: const Icon(Icons.arrow_back, color: Colors.white, size: 28),
-                onPressed: prevStep,
-                tooltip: "Back to index",
-                style: ButtonStyle(
-                  overlayColor: MaterialStateProperty.all(Colors.transparent),
+            const SizedBox(height: 40),
+
+            // Top back arrow in a circle + “Back to Home” text
+            GestureDetector(
+              onTap: () => Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (_) => const MainPage()),
+              ),
+              child: Column(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: const BoxDecoration(
+                      color: Colors.white24,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.arrow_back,
+                        color: Colors.white, size: 28),
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    "start",
+                    style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 50),
+            // Step Title
+            const Center(
+              child: Text(
+                "Phone Verification",
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
                 ),
               ),
             ),
+            const SizedBox(height: 24),
 
-            const SizedBox(height: 10),
-
-            // 🔄 Timeline
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: List.generate(4, (index) {
-                  bool isActive = index == currentStep;
-                  bool isCompleted = index < currentStep;
-
-                  return CircleAvatar(
-                    radius: 18,
-                    backgroundColor: isCompleted
-                        ? Colors.blueGrey
-                        : isActive
-                        ? Colors.blueAccent
-                        : Colors.white.withOpacity(0.7),
-                    child: Text(
-                      '${index + 1}',
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                    ),
-                  );
-                }),
-              ),
-            ),
-
-            const SizedBox(height: 30),
-
-            // 📱 Phone Title
-            const Text("Phone Verification",
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)),
-            const SizedBox(height: 16),
             _formLabel("Phone Number"),
-
-            // ☎️ Phone Input (styled)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: TextField(
+              child: _input(
                 controller: phoneController,
+                hint: "(+357 99888777)",
                 keyboardType: TextInputType.phone,
-                style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 18),
-                decoration: InputDecoration(
-                  hintText: " e.g (+357 99888777)",
-                  hintStyle: const TextStyle(color: Colors.grey, fontWeight: FontWeight.w600),
-                  filled: true,
-                  fillColor: Colors.white,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
               ),
             ),
 
             if (isCodeSent) ...[
-              const SizedBox(height: 18),
+              const SizedBox(height: 24),
               _formLabel("Enter OTP Code"),
-              const SizedBox(height: 14),
-              _buildOtpFields(context),
+              const SizedBox(height: 16),
+              _buildOtpFields(),
             ],
 
-
-            const SizedBox(height: 30),
-
-            // 📤 Button
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: _button(
-                isCodeSent ? "Verify Code" : "Send Code",
-                onPressed: isCodeSent ? verifyOtp : sendOtp,
-              ),
-            ),
-            _loginRedirect(),
+            // extra space so content isn’t hidden behind bottom bar
+            const SizedBox(height: 120),
           ],
-
         );
 
       case 1:
         return Column(
-
-          crossAxisAlignment: CrossAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SizedBox(height: 20),
+            const SizedBox(height: 40),
+            // Glassy “Previous Step” button
             Align(
-              alignment: Alignment.topLeft,
-              child: IconButton(
-                icon: const Icon(Icons.arrow_back, color: Colors.white),
-                onPressed: prevStep,
-                tooltip: "Back to previous step",
+              alignment: Alignment.centerLeft,
+              child: _glassyButton(
+                label: "Previous Step",
+                onTap: prevStep,
               ),
             ),
-
-
-            // Timeline bubbles
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: List.generate(4, (index) {
-                  bool isActive = index == currentStep;
-                  bool isCompleted = index < currentStep;
-
-                  return CircleAvatar(
-                    radius: 18,
-                    backgroundColor: isCompleted
-                        ? Colors.blueGrey
-                        : isActive
-                        ? Colors.blueAccent
-                        : Colors.white.withOpacity(0.7),
-                    child: Text(
-                      '${index + 1}',
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                    ),
-                  );
-                }),
+            const SizedBox(height: 40),
+            // Step Title
+            const Center(
+              child: Text(
+                "Personal Info",
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
               ),
             ),
+            const SizedBox(height: 24),
 
-            const SizedBox(height: 30),
-
-            const Text("Personal Info",
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)),
-
-            const SizedBox(height: 16),
             _formLabel("First Name"),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: _input(nameController, hint: "Enter name"),
-            ),
-            const SizedBox(height: 10),
+            _input(controller: nameController, hint: "Enter name"),
+            const SizedBox(height: 20),
+
             _formLabel("Email"),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: _input(emailController, hint: "Enter email", keyboardType: TextInputType.emailAddress),
+            _input(
+              controller: emailController,
+              hint: "Enter email",
+              keyboardType: TextInputType.emailAddress,
             ),
-            const SizedBox(height: 30),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: _button("Save & Continue", onPressed: nextStep),
-            ),
-            _loginRedirect(),
+
+            const SizedBox(height: 120),
           ],
         );
 
-
-
       case 2:
         return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
+          padding: const EdgeInsets.symmetric(horizontal: 20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
             children: [
+              const SizedBox(height: 40),
               Align(
-                alignment: Alignment.topLeft,
-                child: IconButton(
-                  icon: const Icon(Icons.arrow_back, color: Colors.white),
-                  onPressed: prevStep,
-                  tooltip: "Previous step",
+                alignment: Alignment.centerLeft,
+                child: _glassyButton(
+                  label: "Previous Step",
+                  onTap: prevStep,
                 ),
               ),
-
-              const SizedBox(height: 30),
-
-              // 🚚 Page Title
-              const Text(
-                "Delivery Address",
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
+              const SizedBox(height: 40),
+              const Center(
+                child: Text(
+                  "Delivery Address",
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 24),
 
-              // 🏠 Address Input Field (Google Suggest)
               _formLabel("Address"),
-              _input(addressController, hint: "Start typing your address..."),
+              _input(controller: addressController, hint: "Start typing your address..."),
 
               const SizedBox(height: 16),
-
-              // 🗺️ Choose on Map Button
               ElevatedButton.icon(
                 onPressed: () async {
                   final picked = await Navigator.pushNamed(context, '/map-picker');
                   if (picked is String && picked.isNotEmpty) {
-                    setState(() {
-                      addressController.text = picked;
-                    });
+                    setState(() => addressController.text = picked);
                   }
                 },
+                icon: const Icon(Icons.map),
+                label: const Text("Choose on Map",
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                 style: ElevatedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(50),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
                   backgroundColor: Colors.white,
                   foregroundColor: Colors.black87,
-                  minimumSize: const Size.fromHeight(48),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 ),
-                icon: const Icon(Icons.map),
-                label: const Text("Choose on Map", style: TextStyle(fontWeight: FontWeight.bold)),
               ),
 
-              const SizedBox(height: 24),
-
-              // ✅ Save Button
-              _button("Save & Continue", onPressed: () {
-                if (addressController.text.trim().isEmpty) {
-                  _showError("Please enter your address.");
-                } else {
-                  nextStep();
-                }
-              }),
-              _loginRedirect(),
+              const SizedBox(height: 120),
             ],
           ),
         );
@@ -360,134 +374,107 @@ class _RegisterPageState extends State<RegisterPage> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            const SizedBox(height: 40),
             Align(
-              alignment: Alignment.topLeft,
-              child: IconButton(
-                icon: const Icon(Icons.arrow_back, color: Colors.white),
-                onPressed: prevStep,
-                tooltip: "Previous step",
+              alignment: Alignment.centerLeft,
+              child: _glassyButton(
+                label: "Previous Step",
+                onTap: prevStep,
               ),
             ),
+            const SizedBox(height: 40),
+            const Center(
+              child: Text(
+                "Create Password",
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
 
-            const Text("Create Password", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 10),
             _formLabel("Password"),
-            _input(passwordController, hint: "Enter password", obscure: true),
-            const SizedBox(height: 10),
-            _formLabel("Confirm Password"),
-            _input(confirmPasswordController, hint: "Repeat password", obscure: true),
+            _input(controller: passwordController, hint: "Enter password", obscure: true),
             const SizedBox(height: 20),
-            _button("Create Account", onPressed: createAccount),
-            _loginRedirect(),
+
+            _formLabel("Confirm Password"),
+            _input(controller: confirmPasswordController, hint: "Repeat password", obscure: true),
+
+            const SizedBox(height: 120),
           ],
         );
+
       default:
         return const SizedBox();
     }
   }
 
-  Widget _input(TextEditingController ctrl, {String hint = '', bool obscure = false, TextInputType keyboardType = TextInputType.text}) {
-    return TextField(
-      controller: ctrl,
-      obscureText: obscure,
-      keyboardType: keyboardType,
-      style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
-      decoration: InputDecoration(
-        hintText: hint,
-        filled: true,
-        fillColor: Colors.white.withOpacity(0.9),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      ),
-    );
-  }
-
-  Widget _formLabel(String text) {
+  // ─────────────────────────────────────────
+  // TextField builder with larger padding & font
+  Widget _input({
+    required TextEditingController controller,
+    String hint = '',
+    bool obscure = false,
+    TextInputType keyboardType = TextInputType.text,
+  }) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 4.0),
-      child: Text(text, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-    );
-  }
-
-  Widget _button(String text, {required VoidCallback onPressed}) {
-    return ElevatedButton(
-      onPressed: onPressed,
-      style: ElevatedButton.styleFrom(
-        backgroundColor: const Color(0xFFC70418),
-        foregroundColor: Colors.white,
-        minimumSize: const Size.fromHeight(48),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-      child: Text(text, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-    );
-  }
-
-  Widget _loginRedirect() {
-    return Padding(
-      padding: const EdgeInsets.only(top: 24),
-      child: Center(
-        child: GestureDetector(
-          onTap: () => Navigator.pushReplacementNamed(context, '/login'),
-          child: const Text(
-            "Already have an account? Sign in",
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: TextField(
+        controller: controller,
+        obscureText: obscure,
+        keyboardType: keyboardType,
+        style: const TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.bold,
+          color: Colors.black,
+        ),
+        decoration: InputDecoration(
+          hintText: hint,
+          filled: true,
+          fillColor: Colors.white.withOpacity(0.9),
+          contentPadding:
+          const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide.none,
           ),
         ),
       ),
     );
   }
 
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          Image.asset(
-            "assets/background/fade_base.jpg",
-            fit: BoxFit.cover,
-          ),
-          BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-            child: Container(
-              color: Colors.black.withOpacity(0.2),
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 60),
-              child: Column(
-                children: [
-                  if (currentStep > 0)
-                    Align(
-                      alignment: Alignment.topLeft,
-                      child: IconButton(
-                        icon: const Icon(Icons.arrow_back, color: Colors.white),
-                        onPressed: prevStep,
-                      ),
-                    ),
-                  const SizedBox(height: 10),
-                  Expanded(child: SingleChildScrollView(child: buildStepContent())),
-                ],
-              ),
-            ),
-          ),
-        ],
+  // Larger, bold white labels
+  Widget _formLabel(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 20, bottom: 4),
+      child: Text(
+        text,
+        style: const TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
+          color: Colors.white,
+        ),
       ),
     );
   }
 
-  Widget _buildOtpFields(BuildContext context) {
+  // OTP fields (unchanged size increase)
+  Widget _buildOtpFields() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-      children: List.generate(6, (index) {
+      children: List.generate(6, (i) {
         return SizedBox(
-          width: 40,
-          height: 50,
+          width: 45,
+          height: 55,
           child: TextField(
-            focusNode: otpFocusNodes[index],
+            focusNode: otpFocusNodes[i],
             textAlign: TextAlign.center,
             keyboardType: TextInputType.number,
             maxLength: 1,
             style: const TextStyle(
-              fontSize: 20,
+              fontSize: 22,
               fontWeight: FontWeight.bold,
               color: Colors.black,
             ),
@@ -500,10 +487,10 @@ class _RegisterPageState extends State<RegisterPage> {
                 borderSide: BorderSide.none,
               ),
             ),
-            onChanged: (value) {
-              otpValues[index] = value;
-              if (value.isNotEmpty && index < 5) {
-                FocusScope.of(context).requestFocus(otpFocusNodes[index + 1]);
+            onChanged: (v) {
+              otpValues[i] = v;
+              if (v.isNotEmpty && i < 5) {
+                FocusScope.of(context).requestFocus(otpFocusNodes[i + 1]);
               }
               otpController.text = otpValues.join();
             },
@@ -512,8 +499,43 @@ class _RegisterPageState extends State<RegisterPage> {
       }),
     );
   }
+
+  // Glassy “Previous Step” button
+  Widget _glassyButton({
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 20),
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 24),
+        decoration: BoxDecoration(
+          color: Colors.white24,
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: const [
+            BoxShadow(
+              color: Colors.black26,
+              offset: Offset(0, 4),
+              blurRadius: 8,
+              spreadRadius: 1,
+            ),
+          ],
+          border: Border.all(
+            color: Colors.white54,
+            width: 1.5,
+          ),
+        ),
+        child: Text(
+          label,
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+            shadows: [Shadow(color: Colors.black38, blurRadius: 4)],
+          ),
+        ),
+      ),
+    );
+  }
 }
-
-
-
-

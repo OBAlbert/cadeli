@@ -1,4 +1,5 @@
 //import 'package:cadeli/screens/admin_page.dart';
+import 'package:cadeli/screens/products_page.dart';
 import 'package:cadeli/screens/register_page.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -45,9 +46,10 @@ class MyApp extends StatelessWidget {
           scaffoldBackgroundColor: const Color(0xFFA1BDC7),
           primaryColor: Colors.blueAccent,
         ),
-        home: const StartToIndexRouter(),
-        //home: const AdminPage(),
-        //const StartToIndexRouter(),
+        home: const StartRouter(),
+
+        //home: const StartToIndexRouter(),
+
         routes: {
           '/map-picker': (context) => const PickLocationPage(),
           '/login': (context) => const LoginPage(),
@@ -102,4 +104,29 @@ class AuthGate extends StatelessWidget {
     return const MainPage();
   }
 }
+
+class StartRouter extends StatefulWidget {
+  const StartRouter({super.key});
+
+  @override
+  State<StartRouter> createState() => _StartRouterState();
+}
+
+class _StartRouterState extends State<StartRouter> {
+  @override
+  void initState() {
+    super.initState();
+    Future.delayed(const Duration(seconds: 2), () {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const AuthGate()),
+      );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return const StartPage(); // Your splash screen
+  }
+}
+
 

@@ -44,6 +44,7 @@ dependencies:
   google_place: ^0.4.7
   intl: ^0.18.0
   flutter_inset_box_shadow: ^1.0.8
+  collection: ^1.18.0
 
 
   # Downgraded to avoid conflict

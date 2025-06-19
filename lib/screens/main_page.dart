@@ -51,14 +51,14 @@ class _MainPageState extends State<MainPage> {
     final pages = _isAdmin
         ? [
       const HomePage(),
-      const ProductsPage(),
+      ProductsPage(),
       const CartPage(),
       const ProfilePage(),
       const AdminPage(),
     ]
         : [
       const HomePage(),
-      const ProductsPage(),
+      ProductsPage(),
       const CartPage(),
       const ProfilePage(),
     ];

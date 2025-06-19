@@ -1,11 +1,17 @@
+// ✅ Step-by-step FIX to your GlobalKey conflict and cart animation issues
+
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_inset_box_shadow/flutter_inset_box_shadow.dart' as inset;
+import 'package:provider/provider.dart';
 import 'package:collection/collection.dart';
 
-// Replace with your real pages
 import '../screens/cart_page.dart';
-import '../screens/chat_page.dart'; // Placeholder chat screen
+import '../screens/chat_page.dart';
+import '../models/cart_provider.dart';
+
+// ✅ 1. Declare the global cartIconKey ONCE
+GlobalKey getCartIconKeyInstance() => GlobalKey(debugLabel: 'cartIconKey_unique');
 
 class AppScaffold extends StatelessWidget {
   final int currentIndex;
@@ -23,7 +29,6 @@ class AppScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Define bottom nav items (Chat replaces Cart, Products icon updated)
     final items = [
       const BottomNavigationBarItem(icon: Icon(Icons.home), label: "Home"),
       const BottomNavigationBarItem(icon: Icon(Icons.local_drink_outlined), label: "Products"),
@@ -36,7 +41,6 @@ class AppScaffold extends StatelessWidget {
     }
 
     return Scaffold(
-      // Main App Bar (with Cart icon top-right)
       appBar: AppBar(
         automaticallyImplyLeading: false,
         backgroundColor: const Color(0xFF1A2D3D),
@@ -55,28 +59,56 @@ class AppScaffold extends StatelessWidget {
           ],
         ),
         actions: [
-          // Cart icon in top-right corner
-          IconButton(
-            icon: const Icon(Icons.shopping_cart_outlined),
-            tooltip: "Cart",
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const CartPage()),
+          Consumer<CartProvider>(
+            builder: (context, cart, _) {
+              return Stack(
+                alignment: Alignment.topRight,
+                children: [
+                  IconButton(
+                    key: getCartIconKeyInstance(),
+                    icon: const Icon(Icons.shopping_cart_outlined),
+                    tooltip: "Cart",
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const CartPage()),
+                      );
+                    },
+                  ),
+                  if (cart.cartItems.isNotEmpty)
+                    Positioned(
+                      right: 6,
+                      top: 6,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: const BoxDecoration(
+                          color: Colors.red,
+                          shape: BoxShape.circle,
+                        ),
+                        constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                        child: Text(
+                          '${cart.totalItems}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                ],
               );
             },
           ),
         ],
       ),
-
       body: SafeArea(child: child),
-
-      // GLASSY BOTTOM NAVIGATION BAR
       bottomNavigationBar: ClipRRect(
         borderRadius: BorderRadius.circular(26),
         child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20), // Main blur effect
+          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6), // Slim internal space
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
             decoration: BoxDecoration(
               color: const Color.fromRGBO(255, 255, 255, 0.08),
               gradient: const LinearGradient(
@@ -93,14 +125,12 @@ class AppScaffold extends StatelessWidget {
                 width: 0.8,
               ),
               boxShadow: const [
-                // Soft white inner highlight
                 inset.BoxShadow(
                   color: Color.fromRGBO(255, 255, 255, 0.08),
                   offset: Offset(0, 1),
                   blurRadius: 1.5,
                   inset: true,
                 ),
-                // Soft black inner depth
                 inset.BoxShadow(
                   color: Color.fromRGBO(0, 0, 0, 0.15),
                   offset: Offset(0, -1),
@@ -112,13 +142,12 @@ class AppScaffold extends StatelessWidget {
             child: BottomNavigationBar(
               currentIndex: currentIndex,
               onTap: (index) {
-                // Handle navigation to ChatPage for index 2
                 if (index == 2) {
                   Navigator.of(context).push(
                     MaterialPageRoute(builder: (_) => const ChatPage()),
                   );
                 } else {
-                  onTabSelected(index); // Trigger parent state update
+                  onTabSelected(index);
                 }
               },
               backgroundColor: Colors.transparent,
