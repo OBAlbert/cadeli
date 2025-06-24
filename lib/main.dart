@@ -43,7 +43,7 @@ class MyApp extends StatelessWidget {
         debugShowCheckedModeBanner: false,
         title: 'Cadeli App',
         theme: ThemeData.dark().copyWith(
-          scaffoldBackgroundColor: const Color(0xFFA1BDC7),
+          scaffoldBackgroundColor: Colors.white,
           primaryColor: Colors.blueAccent,
         ),
         home: const StartRouter(),

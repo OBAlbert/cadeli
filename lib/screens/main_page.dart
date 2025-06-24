@@ -7,7 +7,7 @@ import 'home_page.dart';
 import 'products_page.dart';
 import 'cart_page.dart';
 import 'profile_page.dart';
-import 'admin_page.dart';
+import 'admin_dashboard.dart';
 
 class MainPage extends StatefulWidget {
   const MainPage({super.key});
@@ -51,14 +51,14 @@ class _MainPageState extends State<MainPage> {
     final pages = _isAdmin
         ? [
       const HomePage(),
-      ProductsPage(),
+      const ProductsPage(),
       const CartPage(),
       const ProfilePage(),
-      const AdminPage(),
+      const AdminDashboard(),
     ]
         : [
       const HomePage(),
-      ProductsPage(),
+      const ProductsPage(),
       const CartPage(),
       const ProfilePage(),
     ];
