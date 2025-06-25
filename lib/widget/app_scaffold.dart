@@ -31,10 +31,11 @@ class AppScaffold extends StatelessWidget {
 
   Future<String> _getUserFirstName() async {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return '';
+    if (user == null) return 'there';
+
     final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-    final fullName = doc.data()?['favourites']?['fullName'] ?? 'there';
-    return fullName.toString().split(' ').first;
+    final fullName = doc.data()?['fullName'] ?? '';
+    return fullName.toString().split(' ').first.isNotEmpty ? fullName.toString().split(' ').first : 'there';
   }
 
 
@@ -63,20 +64,24 @@ class AppScaffold extends StatelessWidget {
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
                   colors: [
-                    Color.fromRGBO(255, 255, 255, 0.2),
-                    Color.fromRGBO(255, 255, 255, 0.05),
+                    Color.fromRGBO(255, 255, 255, 0.12),
+                    Color.fromRGBO(255, 255, 255, 0.06),
                   ],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
-                ),
-                color: Colors.white.withOpacity(0.1),
-                border: Border(
-                  bottom: BorderSide(color: Colors.white.withOpacity(0.2)),
                 ),
                 borderRadius: const BorderRadius.only(
                   bottomLeft: Radius.circular(12),
                   bottomRight: Radius.circular(12),
                 ),
+                border: Border.all(color: Colors.white.withOpacity(0.2)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.03),
+                    blurRadius: 12,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
               child: LayoutBuilder(
                 builder: (context, constraints) {
@@ -113,19 +118,45 @@ class AppScaffold extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
                           // ⬅️ Address dropdown container
-                          Align(
-                            alignment: Alignment.centerLeft,
+                          // Expanded(
+                          //   child: Container(
+                          //     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                          //     decoration: BoxDecoration(
+                          //       color: Colors.white.withOpacity(0.15),
+                          //       borderRadius: BorderRadius.circular(14),
+                          //       border: Border.all(color: Colors.white.withOpacity(0.3)),
+                          //       boxShadow: [
+                          //         BoxShadow(
+                          //           color: Colors.white.withOpacity(0.05),
+                          //           blurRadius: 8,
+                          //           offset: const Offset(0, 2),
+                          //         ),
+                          //       ],
+                          //     ),
+                          //     child: const AddressDropdown(),
+                          //   ),
+                          // ),
+
+                          SizedBox(
+                            width: 200, // 👈 adjust this value to tighten or stretch manually
                             child: Container(
-                              constraints: const BoxConstraints(maxWidth: 2200), // 👈 shorten the box
-                              padding: const EdgeInsets.only(left: 12, right: 8, top: 4, bottom: 4), // ⬅️ more compact
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                               decoration: BoxDecoration(
                                 color: Colors.white.withOpacity(0.15),
                                 borderRadius: BorderRadius.circular(14),
                                 border: Border.all(color: Colors.white.withOpacity(0.3)),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.white.withOpacity(0.05),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
                               ),
                               child: const AddressDropdown(),
                             ),
                           ),
+
 
                           const SizedBox(width: 8),
 
@@ -200,20 +231,28 @@ class AppScaffold extends StatelessWidget {
         child: ClipRRect(
           borderRadius: BorderRadius.circular(24),
           child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30), // ⬅️ stronger blur
+            filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
             child: Container(
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.15),
+                gradient: const LinearGradient(
+                  colors: [
+                    Color.fromRGBO(255, 255, 255, 0.25),
+                    Color.fromRGBO(255, 255, 255, 0.05),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
                 borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: Colors.white.withOpacity(0.3)), // ⬅️ visible outline
+                border: Border.all(color: Colors.white.withOpacity(0.35)),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 16,
+                    offset: const Offset(0, 6),
                   ),
                 ],
               ),
+
               child: BottomNavigationBar(
                 currentIndex: currentIndex >= 0 && currentIndex < items.length ? currentIndex : 0,
                 backgroundColor: Colors.transparent,
@@ -221,8 +260,17 @@ class AppScaffold extends StatelessWidget {
                 type: BottomNavigationBarType.fixed,
                 selectedItemColor: Colors.redAccent,
                 unselectedItemColor: const Color(0xFF1A233D).withOpacity(0.5),
-                selectedFontSize: 11,
-                unselectedFontSize: 10,
+                selectedLabelStyle: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12,
+                  color: Colors.redAccent,
+                ),
+                unselectedLabelStyle: TextStyle(
+                  fontWeight: FontWeight.w500,
+                  fontSize: 11,
+                  color: const Color(0xFF1A233D).withOpacity(0.5),
+                ),
+
                 onTap: (index) {
                   if (index == 2) {
                     Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ChatPage()));
@@ -240,20 +288,20 @@ class AppScaffold extends StatelessWidget {
                       duration: const Duration(milliseconds: 250),
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
-                        color: isSelected ? Colors.white.withOpacity(0.25) : Colors.transparent,
+                        color: isSelected ? Colors.white.withOpacity(0.2) : Colors.transparent,
                         borderRadius: BorderRadius.circular(16),
+                        border: isSelected
+                            ? Border.all(color: Colors.redAccent.withOpacity(0.3))
+                            : null,
                         boxShadow: isSelected
                             ? [
                           BoxShadow(
-                            color: Colors.redAccent.withOpacity(0.4),
-                            blurRadius: 24,
-                            offset: const Offset(0, 4),
+                            color: Colors.redAccent.withOpacity(0.25),
+                            blurRadius: 16,
+                            offset: const Offset(0, 3),
                           ),
                         ]
                             : [],
-                        border: isSelected
-                            ? Border.all(color: Colors.redAccent.withOpacity(0.4))
-                            : null,
                       ),
                       child: IconTheme(
                         data: IconThemeData(

@@ -39,55 +39,29 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Future<void> loadProfile() async {
-    try {
-      final docRef = _firestore.collection('users').doc(user.uid);
-      final doc = await docRef.get();
+    final docRef = _firestore.collection('users').doc(user.uid);
+    final doc = await docRef.get();
 
-      if (!doc.exists) {
-        // Fresh schema for new user
-        await docRef.set({
-          'email': user.email ?? '',
-          'name': user.displayName,
-          'phone': user.phoneNumber,
-          'notes': '',
-          'favourites': [],
-          'orderHistory': [],
-          'activeOrders': [],
-          'createdAt': Timestamp.now(),
-        });
-      } else {
-        // If document exists but missing fields, patch it
-        final existingData = doc.data()!;
-        final Map<String, dynamic> patchedData = {
-          'email': existingData['email'] ?? user.email ?? '',
-          'fullName': existingData['fullName'] ?? '',
-          'phone': existingData['phone'] ?? '',
-          'notes': existingData['notes'] ?? '',
-          'favourites': existingData['favourites'] ?? [],
-          'orderHistory': existingData['orderHistory'] ?? [],
-          'activeOrders': existingData['activeOrders'] ?? [],
-          'createdAt': existingData['createdAt'] ?? Timestamp.now(),
-        };
-        await docRef.update(patchedData);
-      }
-
-      userData = (await docRef.get()).data();
-
-      nameController.text = userData?['name'] ?? '';
-      phoneController.text = userData?['phone'] ?? '';
-      notesController.text = userData?['notes'] ?? '';
-    } catch (e) {
-      print("Error loading profile: $e");
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Failed to load profile")),
-      );
-    } finally {
-      setState(() {
-        isLoading = false;
+    if (!doc.exists) {
+      await docRef.set({
+        'email': user.email ?? '',
+        'name': user.displayName,
+        'phone': user.phoneNumber,
+        'notes': '',
+        'favourites': [],
+        'orderHistory': [],
+        'activeOrders': [],
+        'createdAt': Timestamp.now(),
       });
     }
-  }
 
+    final data = (await docRef.get()).data();
+    userData = data;
+    nameController.text = data?['fullName'] ?? '';
+    phoneController.text = data?['phone'] ?? '';
+    notesController.text = data?['notes'] ?? '';
+    setState(() => isLoading = false);
+  }
 
   Future<void> saveProfile() async {
     try {
@@ -96,17 +70,10 @@ class _ProfilePageState extends State<ProfilePage> {
         'phone': phoneController.text.trim(),
         'notes': notesController.text.trim(),
       });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Profile updated")),
-      );
-
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Profile updated")));
       setState(() => isEditing = false);
     } catch (e) {
-      print("Update error: $e");
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Failed to update profile")),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Failed to update profile")));
     }
   }
 
@@ -116,9 +83,7 @@ class _ProfilePageState extends State<ProfilePage> {
     final confirmPass = confirmPasswordController.text.trim();
 
     if (newPass != confirmPass) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Passwords do not match")),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Passwords do not match")));
       return;
     }
 
@@ -126,14 +91,10 @@ class _ProfilePageState extends State<ProfilePage> {
       final cred = EmailAuthProvider.credential(email: user.email!, password: oldPass);
       await user.reauthenticateWithCredential(cred);
       await user.updatePassword(newPass);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Password changed successfully")),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Password changed successfully")));
       setState(() => showPasswordSection = false);
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error: ${e.toString()}")),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: ${e.toString()}")));
     }
   }
 
@@ -141,23 +102,24 @@ class _ProfilePageState extends State<ProfilePage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
+        Text(label,
+            style: const TextStyle(
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
+              color: Color(0xFF1A233D),
+            )),
         const SizedBox(height: 4),
         Container(
           decoration: BoxDecoration(
-            color: const Color(0xFFE4EDF2),
+            color: const Color(0xFFF2F4F7),
             borderRadius: BorderRadius.circular(14),
-            boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 6)],
           ),
           margin: const EdgeInsets.only(bottom: 16),
           child: TextField(
             controller: controller,
             maxLines: maxLines,
             enabled: isEditing,
-            style: const TextStyle(               // 👈 ADD THIS
-              color: Colors.black,                // or any color that contrasts well
-              fontSize: 16,
-            ),
+            style: const TextStyle(color: Color(0xFF1A233D), fontSize: 15),
             decoration: InputDecoration(
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
               contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -172,7 +134,8 @@ class _ProfilePageState extends State<ProfilePage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text("Favourites", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        const Text("Favourites",
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF1A233D))),
         const SizedBox(height: 10),
         SizedBox(
           height: 100,
@@ -185,7 +148,6 @@ class _ProfilePageState extends State<ProfilePage> {
               decoration: BoxDecoration(
                 color: const Color(0xFF97CFE6),
                 borderRadius: BorderRadius.circular(12),
-                boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 4)],
               ),
               child: const Center(child: Text("Item", style: TextStyle(color: Colors.black))),
             ),
@@ -212,7 +174,7 @@ class _ProfilePageState extends State<ProfilePage> {
   Widget buildTile(IconData icon, String text, [VoidCallback? onTap]) {
     return ListTile(
       leading: Icon(icon, color: const Color(0xFF254573)),
-      title: Text(text),
+      title: Text(text, style: const TextStyle(color: Color(0xFF1A233D))),
       trailing: const Icon(Icons.chevron_right),
       onTap: onTap,
     );
@@ -224,17 +186,13 @@ class _ProfilePageState extends State<ProfilePage> {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("Profile", style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: const Color(0xFF254573),
-      ),
-      body: SingleChildScrollView(
+    return SafeArea(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // 🔓 Logout top right
             Align(
               alignment: Alignment.topRight,
               child: IconButton(
@@ -245,6 +203,8 @@ class _ProfilePageState extends State<ProfilePage> {
                 },
               ),
             ),
+
+            // 👤 Avatar & Email
             const Center(
               child: Column(
                 children: [
@@ -261,9 +221,13 @@ class _ProfilePageState extends State<ProfilePage> {
               child: Text(user.email ?? "No email", style: const TextStyle(color: Colors.black54)),
             ),
             const SizedBox(height: 20),
+
+            // ✏️ Editable fields
             buildTextField("Full Name", nameController),
             buildTextField("Phone", phoneController),
             buildTextField("Delivery Notes", notesController, maxLines: 2),
+
+            // 🔘 Edit/Save
             const SizedBox(height: 12),
             SizedBox(
               width: double.infinity,
@@ -285,6 +249,8 @@ class _ProfilePageState extends State<ProfilePage> {
                 ),
               ),
             ),
+
+            // 🔒 Change password
             const SizedBox(height: 16),
             TextButton(
               onPressed: () => setState(() => showPasswordSection = !showPasswordSection),
@@ -311,11 +277,12 @@ class _ProfilePageState extends State<ProfilePage> {
                   )
                 ],
               ),
+
+            // 🌟 Favourites & Quick Links
             const SizedBox(height: 30),
             buildFavourites(),
             const SizedBox(height: 30),
             buildQuickLinks(),
-
           ],
         ),
       ),
