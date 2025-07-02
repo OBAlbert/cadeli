@@ -7,6 +7,7 @@ class WooCommerceService {
   final String consumerSecret = 'cs_511ddc5109e0cdbf1ba6ab50e985ec2f09ef9a66';           // ✅ paste yours
 
   Future<List<dynamic>> fetchProducts() async {
+
     final url = Uri.parse(
       '$baseUrl/wp-json/wc/v3/products?consumer_key=$consumerKey&consumer_secret=$consumerSecret&per_page=100',
     );
@@ -20,4 +21,21 @@ class WooCommerceService {
       throw Exception('Failed to load products: ${response.statusCode}');
     }
   }
+
+  Future<Map<String, dynamic>?> fetchProductById(String id) async {
+    final url = Uri.parse(
+      '$baseUrl/wp-json/wc/v3/products/$id?consumer_key=$consumerKey&consumer_secret=$consumerSecret',
+    );
+
+    final response = await http.get(url);
+
+    if (response.statusCode == 200) {
+      return json.decode(response.body);
+    } else {
+      print('Error fetching product by ID: ${response.statusCode}');
+      return null;
+    }
+  }
+
+
 }

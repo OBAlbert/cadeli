@@ -15,16 +15,16 @@ class CartPage extends StatelessWidget {
     final cartItems = cartProvider.cartItems;
 
     return AppScaffold(
-      currentIndex: -1,
+      currentIndex: 0,
+      hideNavigationBar: true,
       onTabSelected: (index) {
         Navigator.of(context).popUntil((route) => route.isFirst);
       },
-      child: Scaffold(
-        backgroundColor: Colors.white,
-        body: Column(
+      child: Container(
+        color: Colors.white,
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            //const SizedBox(height: 20),
             const Padding(
               padding: EdgeInsets.fromLTRB(20, 16, 20, 10),
               child: Text(
@@ -84,96 +84,106 @@ class CartPage extends StatelessWidget {
                   final double unitPrice = product.price;
                   final double totalPrice = unitPrice * quantity;
 
-                  return Container(
-                    margin: const EdgeInsets.symmetric(vertical: 10),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.3),
-                      borderRadius: BorderRadius.circular(22),
-                      border: Border.all(color: Colors.white.withOpacity(0.4)),
-                      boxShadow: const [
-                        BoxShadow(color: Colors.black26, blurRadius: 14, offset: Offset(0, 6)),
-                        BoxShadow(color: Colors.white30, offset: Offset(0, -2), blurRadius: 4),
-                      ],
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: Image.network(
-                            product.imageUrl,
-                            width: 60,
-                            height: 60,
-                            fit: BoxFit.cover,
-                            loadingBuilder: (context, child, loadingProgress) {
-                              if (loadingProgress == null) return child;
-                              return const SizedBox(
-                                width: 60,
-                                height: 60,
-                                child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-                              );
-                            },
-                            errorBuilder: (context, error, stackTrace) =>
-                            const Icon(Icons.broken_image, color: Colors.red, size: 40),
-                          ),
+                  return GestureDetector(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ProductDetailPage(product: product),
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(product.name,
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 16,
-                                      color: Colors.black)),
-                              const SizedBox(height: 4),
-                              Text('${item['size']} - ${item['package']}',
-                                  style: const TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w500,
-                                      color: Colors.black87)),
-                              const SizedBox(height: 8),
-                              Text('€${totalPrice.toStringAsFixed(2)}',
-                                  style: const TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.black)),
-                            ],
+                      );
+                    },
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(vertical: 10),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.3),
+                        borderRadius: BorderRadius.circular(22),
+                        border: Border.all(color: Colors.white.withOpacity(0.4)),
+                        boxShadow: const [
+                          BoxShadow(color: Colors.black26, blurRadius: 14, offset: Offset(0, 6)),
+                          BoxShadow(color: Colors.white30, offset: Offset(0, -2), blurRadius: 4),
+                        ],
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: Image.network(
+                              product.imageUrl,
+                              width: 60,
+                              height: 60,
+                              fit: BoxFit.cover,
+                              loadingBuilder: (context, child, loadingProgress) {
+                                if (loadingProgress == null) return child;
+                                return const SizedBox(
+                                  width: 60,
+                                  height: 60,
+                                  child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                                );
+                              },
+                              errorBuilder: (context, error, stackTrace) =>
+                              const Icon(Icons.broken_image, color: Colors.red, size: 40),
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        Column(
-                          children: [
-                            Row(
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                IconButton(
-                                  icon: const Icon(Icons.remove_circle_outline),
-                                  onPressed: () =>
-                                      cartProvider.updateQuantity(index, quantity - 1),
-                                  color: Colors.black54,
-                                ),
-                                Text('$quantity',
+                                Text(product.name,
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16,
+                                        color: Colors.black)),
+                                const SizedBox(height: 4),
+                                Text('${item['size']} - ${item['package']}',
+                                    style: const TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w500,
+                                        color: Colors.black87)),
+                                const SizedBox(height: 8),
+                                Text('€${totalPrice.toStringAsFixed(2)}',
                                     style: const TextStyle(
                                         fontSize: 16,
                                         fontWeight: FontWeight.bold,
                                         color: Colors.black)),
-                                IconButton(
-                                  icon: const Icon(Icons.add_circle_outline),
-                                  onPressed: () =>
-                                      cartProvider.updateQuantity(index, quantity + 1),
-                                  color: Colors.black54,
-                                ),
                               ],
                             ),
-                            IconButton(
-                              icon: const Icon(Icons.delete, color: Colors.redAccent),
-                              onPressed: () => cartProvider.removeFromCart(index),
-                            ),
-                          ],
-                        ),
-                      ],
+                          ),
+                          const SizedBox(width: 8),
+                          Column(
+                            children: [
+                              Row(
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.remove_circle_outline),
+                                    onPressed: () =>
+                                        cartProvider.updateQuantity(index, quantity - 1),
+                                    color: Colors.black54,
+                                  ),
+                                  Text('$quantity',
+                                      style: const TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.black)),
+                                  IconButton(
+                                    icon: const Icon(Icons.add_circle_outline),
+                                    onPressed: () =>
+                                        cartProvider.updateQuantity(index, quantity + 1),
+                                    color: Colors.black54,
+                                  ),
+                                ],
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.delete, color: Colors.redAccent),
+                                onPressed: () => cartProvider.removeFromCart(index),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
                   );
                 },

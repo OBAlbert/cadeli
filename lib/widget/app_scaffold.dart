@@ -1,17 +1,20 @@
+// 📄 app_scaffold.dart
 import 'dart:ui';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:collection/collection.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import '../models/cart_provider.dart';
 import '../screens/cart_page.dart';
 import '../screens/chat_page.dart';
-import '../screens/admin_dashboard.dart';
 import '../screens/info_page.dart';
+import '../screens/search_overlay_page.dart';
 import '../screens/search_page.dart';
-import 'address_dropdown.dart'; // 👈 NEW: You'll create this file below
+import '../screens/admin_dashboard.dart';
+import 'address_dropdown.dart';
 
 GlobalKey getCartIconKeyInstance() => GlobalKey(debugLabel: 'cartIconKey_unique');
 
@@ -20,6 +23,8 @@ class AppScaffold extends StatelessWidget {
   final Widget child;
   final Function(int) onTabSelected;
   final bool isAdmin;
+  final bool hideNavigationBar;
+
 
   const AppScaffold({
     super.key,
@@ -27,33 +32,36 @@ class AppScaffold extends StatelessWidget {
     required this.child,
     required this.onTabSelected,
     this.isAdmin = false,
+    this.hideNavigationBar = false,
   });
 
+  /// 🔍 Fetches the user's first name from Firestore
   Future<String> _getUserFirstName() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return 'there';
-
     final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
     final fullName = doc.data()?['fullName'] ?? '';
     return fullName.toString().split(' ').first.isNotEmpty ? fullName.toString().split(' ').first : 'there';
   }
 
-
   @override
   Widget build(BuildContext context) {
     final items = [
-      const BottomNavigationBarItem(icon: Icon(Icons.home), label: "Home"),
-      const BottomNavigationBarItem(icon: Icon(Icons.local_drink_outlined), label: "Products"),
-      const BottomNavigationBarItem(icon: Icon(Icons.chat_bubble_outline), label: "Chat"),
-      const BottomNavigationBarItem(icon: Icon(Icons.person), label: "Profile"),
+      const BottomNavigationBarItem(icon: Icon(Icons.home_outlined), label: "Home"),
+      const BottomNavigationBarItem(icon: FaIcon(FontAwesomeIcons.wineBottle), label: "Products"),
+      const BottomNavigationBarItem(icon: Icon(Icons.chat_bubble_outline), label: "Messages"),
+      const BottomNavigationBarItem(icon: Icon(Icons.person_outline), label: "Profile"),
     ];
 
     if (isAdmin) {
-      items.insert(4, const BottomNavigationBarItem(icon: Icon(Icons.admin_panel_settings), label: "Admin"));
+      items.add(const BottomNavigationBarItem(icon: Icon(Icons.admin_panel_settings_outlined), label: "Admin"));
     }
 
     return Scaffold(
       extendBody: true,
+
+
+      /// 🧊 Frosted AppBar with greeting and dropdown
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(100),
         child: ClipRect(
@@ -63,10 +71,7 @@ class AppScaffold extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(16, 10, 12, 6),
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
-                  colors: [
-                    Color.fromRGBO(255, 255, 255, 0.12),
-                    Color.fromRGBO(255, 255, 255, 0.06),
-                  ],
+                  colors: [Color.fromRGBO(255, 255, 255, 0.12), Color.fromRGBO(255, 255, 255, 0.06)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
@@ -75,248 +80,200 @@ class AppScaffold extends StatelessWidget {
                   bottomRight: Radius.circular(12),
                 ),
                 border: Border.all(color: Colors.white.withOpacity(0.2)),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.03),
-                    blurRadius: 12,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
               ),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final isNarrow = constraints.maxWidth < 360;
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  /// 👋 Greeting
+                  FutureBuilder<String>(
+                    future: _getUserFirstName(),
+                    builder: (context, snapshot) {
+                      final name = snapshot.connectionState == ConnectionState.waiting
+                          ? "..."
+                          : (snapshot.data ?? "there");
+                      return Text(
+                        "Good afternoon $name",
+                        style: const TextStyle(
+                          color: Color(0xFF1A233D),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 6),
 
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.end,
+                  /// 📍 Address Dropdown & Action Icons
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      // 🌤 Greeting line
-                      FutureBuilder<String>(
-                        future: _getUserFirstName(),
-                        builder: (context, snapshot) {
-                          final name = snapshot.connectionState == ConnectionState.waiting
-                              ? "..."
-                              : (snapshot.data ?? "there");
-                          return Text(
-                            "Good afternoon $name",
-                            style: const TextStyle(
-                              color: Color(0xFF1A233D),
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                            ),
-                          );
-                        },
-                      ),
-
-                      const SizedBox(height: 6),
-
-                      // 📍 Address & Icons Row
-                      // 📍 Address & Icons Row with proper alignment
+                      const AddressDropdown(),
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          // ⬅️ Address dropdown container
-                          // Expanded(
-                          //   child: Container(
-                          //     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                          //     decoration: BoxDecoration(
-                          //       color: Colors.white.withOpacity(0.15),
-                          //       borderRadius: BorderRadius.circular(14),
-                          //       border: Border.all(color: Colors.white.withOpacity(0.3)),
-                          //       boxShadow: [
-                          //         BoxShadow(
-                          //           color: Colors.white.withOpacity(0.05),
-                          //           blurRadius: 8,
-                          //           offset: const Offset(0, 2),
-                          //         ),
-                          //       ],
-                          //     ),
-                          //     child: const AddressDropdown(),
-                          //   ),
-                          // ),
-
-                          SizedBox(
-                            width: 200, // 👈 adjust this value to tighten or stretch manually
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.15),
-                                borderRadius: BorderRadius.circular(14),
-                                border: Border.all(color: Colors.white.withOpacity(0.3)),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.white.withOpacity(0.05),
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ],
-                              ),
-                              child: const AddressDropdown(),
-                            ),
+                          IconButton(
+                            icon: const Icon(Icons.search, size: 22, color: Color(0xFF1A233D)),
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (_) => SearchPage()),
+                              );
+                            },
                           ),
-
-
-                          const SizedBox(width: 8),
-
-                          // ➡️ Icons
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              IconButton(
-                                visualDensity: VisualDensity.compact,
-                                icon: const Icon(Icons.search, color: Color(0xFF1A233D), size: 22),
-                                onPressed: () {
-                                  Navigator.push(context, MaterialPageRoute(builder: (_) => const SearchPage()));
-                                },
-                              ),
-                              IconButton(
-                                visualDensity: VisualDensity.compact,
-                                icon: const Icon(Icons.info_outline, color: Color(0xFF1A233D), size: 22),
-                                onPressed: () {
-                                  Navigator.push(context, MaterialPageRoute(builder: (_) => const InfoPage()));
-                                },
-                              ),
-                              Consumer<CartProvider>(
-                                builder: (context, cart, _) => Stack(
-                                  children: [
-                                    IconButton(
-                                      visualDensity: VisualDensity.compact,
-                                      key: getCartIconKeyInstance(),
-                                      icon: const Icon(Icons.shopping_cart_outlined, color: Color(0xFF1A233D), size: 22),
-                                      onPressed: () {
-                                        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CartPage()));
-                                      },
-                                    ),
-                                    if (cart.cartItems.isNotEmpty)
-                                      Positioned(
-                                        right: 6,
-                                        top: 6,
-                                        child: Container(
-                                          padding: const EdgeInsets.all(4),
-                                          decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
-                                          constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
-                                          child: Text(
-                                            '${cart.totalItems}',
-                                            style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                                            textAlign: TextAlign.center,
-                                          ),
-                                        ),
-                                      ),
-                                  ],
+                          IconButton(
+                            icon: const Icon(Icons.info_outline, size: 22, color: Color(0xFF1A233D)),
+                            onPressed: () {
+                              Navigator.push(context, MaterialPageRoute(builder: (_) => const InfoPage()));
+                            },
+                          ),
+                          Consumer<CartProvider>(
+                            builder: (context, cart, _) => Stack(
+                              children: [
+                                IconButton(
+                                  key: getCartIconKeyInstance(),
+                                  icon: const Icon(Icons.shopping_cart_outlined, size: 22, color: Color(0xFF1A233D)),
+                                  onPressed: () {
+                                    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CartPage()));
+                                  },
                                 ),
-                              ),
-                            ],
+                                if (cart.cartItems.isNotEmpty)
+                                  Positioned(
+                                    right: 6,
+                                    top: 6,
+                                    child: Container(
+                                      padding: const EdgeInsets.all(4),
+                                      decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                                      constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                                      child: Text(
+                                        '${cart.totalItems}',
+                                        style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                        textAlign: TextAlign.center,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
                           ),
                         ],
                       ),
                     ],
-                  );
-                },
-              ),
-            ),
-          ),
-        ),
-      ),
-
-      body: SafeArea(
-        child: Container(
-          color: Colors.white,
-          child: child,
-        ),
-      ),
-      bottomNavigationBar: Padding(
-        padding: const EdgeInsets.fromLTRB(10, 0, 10, 12),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(24),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [
-                    Color.fromRGBO(255, 255, 255, 0.25),
-                    Color.fromRGBO(255, 255, 255, 0.05),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: Colors.white.withOpacity(0.35)),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
-                    blurRadius: 16,
-                    offset: const Offset(0, 6),
                   ),
                 ],
               ),
-
-              child: BottomNavigationBar(
-                currentIndex: currentIndex >= 0 && currentIndex < items.length ? currentIndex : 0,
-                backgroundColor: Colors.transparent,
-                elevation: 0,
-                type: BottomNavigationBarType.fixed,
-                selectedItemColor: Colors.redAccent,
-                unselectedItemColor: const Color(0xFF1A233D).withOpacity(0.5),
-                selectedLabelStyle: const TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 12,
-                  color: Colors.redAccent,
-                ),
-                unselectedLabelStyle: TextStyle(
-                  fontWeight: FontWeight.w500,
-                  fontSize: 11,
-                  color: const Color(0xFF1A233D).withOpacity(0.5),
-                ),
-
-                onTap: (index) {
-                  if (index == 2) {
-                    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ChatPage()));
-                  } else if (isAdmin && index == 4) {
-                    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AdminDashboard()));
-                  } else {
-                    onTabSelected(index);
-                  }
-                },
-                items: items.mapIndexed((i, item) {
-                  final isSelected = currentIndex == i && currentIndex >= 0;
-                  return BottomNavigationBarItem(
-                    label: item.label,
-                    icon: AnimatedContainer(
-                      duration: const Duration(milliseconds: 250),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: isSelected ? Colors.white.withOpacity(0.2) : Colors.transparent,
-                        borderRadius: BorderRadius.circular(16),
-                        border: isSelected
-                            ? Border.all(color: Colors.redAccent.withOpacity(0.3))
-                            : null,
-                        boxShadow: isSelected
-                            ? [
-                          BoxShadow(
-                            color: Colors.redAccent.withOpacity(0.25),
-                            blurRadius: 16,
-                            offset: const Offset(0, 3),
-                          ),
-                        ]
-                            : [],
-                      ),
-                      child: IconTheme(
-                        data: IconThemeData(
-                          color: isSelected ? Colors.redAccent : const Color(0xFF1A233D).withOpacity(0.5),
-                        ),
-                        child: item.icon,
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
             ),
           ),
         ),
       ),
+
+      /// 🧱 Main content
+      body: child,
+
+
+      /// 🍥 BottomNavigationBar with glowing frosted active tab
+      bottomNavigationBar: hideNavigationBar
+          ? null
+          : SafeArea(
+              bottom: true,
+              child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                10,
+                0,
+                10,
+                MediaQuery.of(context).viewPadding.bottom + 6, // ✅ Dynamic bottom padding to avoid RenderFlex overflow
+              ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(26),
+                  child: Stack(
+                    children: [
+                      // 🧊 Full frosted nav bar background with border
+                      BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                        child: Container(
+                          height: 74,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(26),
+                            // ✅ BLACK outline for full nav bar — adjust color here
+                            border: Border.all(color: Colors.black.withOpacity(0.15), width: 1.3),
+                            gradient: const LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                Color.fromRGBO(255, 255, 255, 0.1),
+                                Color.fromRGBO(255, 255, 255, 0.05),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      // 📦 Navigation bar content
+                      SizedBox(
+                        height: 74,
+                        child: BottomNavigationBar(
+                          currentIndex: currentIndex,
+                          backgroundColor: Colors.transparent,
+                          elevation: 0,
+                          type: BottomNavigationBarType.fixed,
+                          selectedItemColor: const Color(0xFF1A233D),
+                          unselectedItemColor: const Color(0xFF1A233D).withOpacity(0.5),
+                          selectedLabelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                          unselectedLabelStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
+                          onTap: (index) {
+                            if (index == 2) {
+                              Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ChatPage()));
+                            } else if (isAdmin && index == 4) {
+                              Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AdminDashboard()));
+                            } else {
+                              onTabSelected(index);
+                            }
+                          },
+                          items: items.mapIndexed((i, item) {
+                            final isSelected = i == currentIndex;
+                            return BottomNavigationBarItem(
+                              label: item.label,
+                              icon: AnimatedContainer(
+                                duration: const Duration(milliseconds: 250),
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                decoration: isSelected
+                                    ? BoxDecoration(
+                                  // 🎨 Active tab pill background
+                                  color: const Color(0xFFE0E0E0).withOpacity(0.25), // ✅ Frosty gray
+                                  borderRadius: BorderRadius.circular(22),
+                                  border: Border.all(
+                                    color: Colors.black.withOpacity(0.6), // ✅ BLACK pill outline
+                                    width: 1.3,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.1),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
+                                )
+                                    : null,
+                                child: IconTheme(
+                                  data: IconThemeData(
+                                    color: isSelected
+                                        ? const Color(0xFF1A233D) // ✅ Active icon color
+                                        : const Color(0xFF1A233D).withOpacity(0.5), // Inactive icon color
+                                    size: 22,
+                                  ),
+                                  child: item.icon,
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    ],
+
+                  ),
+              ),
+           ),
+      ),
+
+
 
 
     );

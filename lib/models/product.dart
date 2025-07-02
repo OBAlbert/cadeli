@@ -1,4 +1,5 @@
 // ✅ FIXED: lib/models/product.dart
+
 class Product {
   final String id;
   final String name;
@@ -40,9 +41,19 @@ class Product {
           .toList(), // 👈 THIS EXTRACTS CATEGORY NAMES// default for now
     );
   }
+  factory Product.empty() {
+    return Product(
+      id: '',
+      name: '',
+      brand: '',
+      price: 0.0,
+      imageUrl: '', categories: [],
+    );
+  }
+
+  bool isEmpty() => id.isEmpty;
 
 }
-
 String _fixUrl(String url) {
   if (url.startsWith('http')) return url;
   return 'https://lightsalmon-okapi-161109.hostingersite.com$url';

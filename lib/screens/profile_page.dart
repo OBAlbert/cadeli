@@ -2,12 +2,17 @@ import 'package:cadeli/screens/login_page.dart';
 import 'package:cadeli/screens/orders_page.dart';
 import 'package:cadeli/screens/addresses_page.dart';
 import 'package:cadeli/screens/favorites_page.dart';
+import 'package:cadeli/screens/product_detail_page.dart';
 import 'package:cadeli/screens/ratings_page.dart';
 import 'package:cadeli/screens/payment_methods_page.dart';
 import 'package:cadeli/screens/contact_page.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:cadeli/models/product.dart';
+
+import '../services/woocommerce_service.dart';
+
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -31,6 +36,8 @@ class _ProfilePageState extends State<ProfilePage> {
   bool isEditing = false;
   bool showPasswordSection = false;
   Map<String, dynamic>? userData;
+  List<Map<String, dynamic>> favoriteProducts = [];
+
 
   @override
   void initState() {
@@ -75,6 +82,44 @@ class _ProfilePageState extends State<ProfilePage> {
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Failed to update profile")));
     }
+  }
+
+  void loadFavoriteProducts() {
+    _firestore
+        .collection('users')
+        .doc(user.uid)
+        .collection('favorites')
+        .snapshots()
+        .listen((snapshot) async {
+      List<Map<String, dynamic>> updatedFavorites = [];
+
+      for (var doc in snapshot.docs) {
+        final productId = doc.id;
+
+        // Try fetching from products collection first
+        final productDoc = await _firestore.collection('products').doc(productId).get();
+
+        if (productDoc.exists) {
+          updatedFavorites.add(productDoc.data()!..['id'] = productId);
+        } else {
+          final data = doc.data();
+          updatedFavorites.add({
+            'id': productId,
+            'name': data['name'] ?? '',
+            'brand': data['brand'] ?? '',
+            'imageUrl': data['imageUrl'] ?? '',
+            'price': data['price'] ?? 0.0,
+            'sizeOptions': data['sizeOptions'] ?? [],
+            'packOptions': data['packOptions'] ?? [],
+            'categories': data['categories'] ?? [],
+          });
+        }
+      }
+
+      setState(() {
+        favoriteProducts = updatedFavorites;
+      });
+    });
   }
 
   Future<void> changePassword() async {
@@ -134,28 +179,156 @@ class _ProfilePageState extends State<ProfilePage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text("Favourites",
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF1A233D))),
+        const Text(
+          "Favourites",
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 16,
+            color: Color(0xFF1A233D),
+          ),
+        ),
         const SizedBox(height: 10),
         SizedBox(
-          height: 100,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            itemCount: 5,
-            itemBuilder: (context, index) => Container(
-              width: 100,
-              margin: const EdgeInsets.only(right: 10),
-              decoration: BoxDecoration(
-                color: const Color(0xFF97CFE6),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Center(child: Text("Item", style: TextStyle(color: Colors.black))),
-            ),
+          height: 160,
+          child: StreamBuilder<QuerySnapshot>(
+            stream: _firestore
+                .collection('users')
+                .doc(user.uid)
+                .collection('favorites')
+                .snapshots(),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) {
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              final docs = snapshot.data!.docs;
+
+              if (docs.isEmpty) {
+                return Center(
+                  child: Text(
+                    "No favourite products yet.\nTap ❤️ on a product to add it here.",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                );
+              }
+
+              return ListView.builder(
+                scrollDirection: Axis.horizontal,
+                itemCount: docs.length,
+                itemBuilder: (context, index) {
+                  final doc = docs[index];
+                  final data = doc.data() as Map<String, dynamic>;
+                  final productId = doc.id;
+
+                  final product = Product(
+                    id: productId,
+                    name: data['name'] ?? '',
+                    brand: data['brand'] ?? '',
+                    price: (data['price'] ?? 0).toDouble(),
+                    imageUrl: data['imageUrl'] ?? '',
+                    sizeOptions: List<String>.from(data['sizeOptions'] ?? []),
+                    packOptions: List<String>.from(data['packOptions'] ?? []),
+                    categories: List<String>.from(data['categories'] ?? []),
+                  );
+
+                  return GestureDetector(
+                    onTap: () async {
+                      final wooService = WooCommerceService();
+                      final wooProducts = await wooService.fetchProducts();
+
+                      final matched = wooProducts.firstWhere(
+                            (p) => p['id'].toString() == product.id,
+                        orElse: () => null,
+                      );
+
+                      if (matched != null) {
+                        final fullProduct = Product.fromWooJson(matched);
+
+                        await FirebaseFirestore.instance
+                            .collection('users')
+                            .doc(user.uid)
+                            .collection('recentlyViewed')
+                            .doc(fullProduct.id)
+                            .set({'viewedAt': Timestamp.now()});
+
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => ProductDetailPage(product: fullProduct),
+                          ),
+                        );
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Product info could not be loaded.')),
+                        );
+                      }
+                    },
+                    child: buildGlassCard(product),
+                  );
+                },
+              );
+            },
           ),
-        )
+        ),
       ],
     );
   }
+
+  Widget buildGlassCard(Product product) {
+    return Container(
+      width: 120,
+      margin: const EdgeInsets.only(right: 10),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.grey.shade400, width: 1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(
+            child: Center(
+              child: Image.network(
+                product.imageUrl,
+                fit: BoxFit.contain,
+                errorBuilder: (context, error, stackTrace) {
+                  return const Icon(Icons.broken_image, size: 40);
+                },
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            product.name,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              color: Colors.black,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+          ),
+          Text(
+            product.brand,
+            style: const TextStyle(
+              fontSize: 12,
+              color: Colors.black87,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+
 
   Widget buildQuickLinks() {
     return Column(

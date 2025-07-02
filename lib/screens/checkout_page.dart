@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/cart_provider.dart';
 import '../widget/app_scaffold.dart';
+import 'main_page.dart';
 import 'order_success_page.dart';
 
 class CheckoutPage extends StatefulWidget {
@@ -119,13 +120,14 @@ class _CheckoutPageState extends State<CheckoutPage> with SingleTickerProviderSt
     final cartItems = cartProvider.cartItems;
 
     return AppScaffold(
-      currentIndex: -1,
+      currentIndex: 0,
+      hideNavigationBar: true,
       onTabSelected: (index) {
-        Navigator.of(context).popUntil((route) => route.isFirst);
-      },
-      child: Scaffold(
-        backgroundColor: Colors.white,
-        body: SingleChildScrollView(
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const MainPage()),
+        );
+        },
+      child: SingleChildScrollView(
           padding: const EdgeInsets.all(20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -324,7 +326,7 @@ class _CheckoutPageState extends State<CheckoutPage> with SingleTickerProviderSt
             ],
           ),
         ),
-      ),
+
     );
   }
 

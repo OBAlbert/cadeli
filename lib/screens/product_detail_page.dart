@@ -43,6 +43,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
 
     _controller.forward();
     _checkFavoriteStatus();
+    _logRecentlyViewed();
   }
 
   Future<void> _checkFavoriteStatus() async {
@@ -59,6 +60,25 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       }
     }
   }
+
+  Future<void> _logRecentlyViewed() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final recentRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .collection('recentlyViewed')
+        .doc(widget.product.id);
+
+    await recentRef.set({
+      'name': widget.product.name,
+      'brand': widget.product.brand,
+      'imageUrl': widget.product.imageUrl,
+      'timestamp': FieldValue.serverTimestamp(),
+    });
+  }
+
 
   Future<void> _toggleFavorite() async {
     final user = FirebaseAuth.instance.currentUser;
@@ -104,6 +124,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
 
     return AppScaffold(
       currentIndex: 1,
+      hideNavigationBar: true,
       onTabSelected: (index) {
         Navigator.of(context).popUntil((route) => route.isFirst);
       },

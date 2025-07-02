@@ -46,6 +46,7 @@ dependencies:
   flutter_inset_box_shadow: ^1.0.8
   collection: ^1.18.0
   http: ^0.13.5
+  font_awesome_flutter: ^9.2.0
 
 
   # Downgraded to avoid conflict
