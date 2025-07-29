@@ -15,7 +15,6 @@ import '../screens/search_overlay_page.dart';
 import '../screens/search_page.dart';
 import '../screens/admin_dashboard.dart';
 import 'address_dropdown.dart';
-import 'custom_bottom_nav_bar.dart';
 
 GlobalKey getCartIconKeyInstance() => GlobalKey(debugLabel: 'cartIconKey_unique');
 
@@ -48,27 +47,63 @@ class AppScaffold extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final items = [
-      BottomNavItem(
-        icon: Icons.home,
+      BottomNavigationBarItem(
+        icon: Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Image.asset(
+            'assets/icons/home_icon.png',
+            height: 24,
+            width: 24,
+          ),
+        ),
         label: "Home",
       ),
-      BottomNavItem(
-        icon: Icons.inventory_2,
+      BottomNavigationBarItem(
+        icon: Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Image.asset(
+            'assets/icons/product_icon.png',
+            height: 24,
+            width: 24,
+          ),
+        ),
         label: "Products",
       ),
-      BottomNavItem(
-        icon: Icons.chat_bubble_outline,
+      BottomNavigationBarItem(
+        icon: Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Image.asset(
+            'assets/icons/chat_icon.png',
+            height: 24,
+            width: 24,
+          ),
+        ),
         label: "Messages",
       ),
-      BottomNavItem(
-        icon: Icons.person_outline,
+      BottomNavigationBarItem(
+        icon: Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Image.asset(
+            'assets/icons/profile_icon.png',
+            height: 24,
+            width: 24,
+          ),
+        ),
         label: "Profile",
       ),
     ];
 
+
+
     if (isAdmin) {
-      items.add(BottomNavItem(
-        icon: Icons.admin_panel_settings_outlined,
+      items.add(BottomNavigationBarItem(
+        icon: Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Icon(
+            Icons.admin_panel_settings_outlined,
+            size: 24,
+          ),
+        ),
         label: "Admin",
       ));
     }
@@ -79,17 +114,12 @@ class AppScaffold extends StatelessWidget {
 
       /// 🧊 Frosted AppBar with greeting and dropdown
       appBar: PreferredSize(
-        preferredSize: Size.fromHeight(MediaQuery.of(context).size.height * 0.12),
+        preferredSize: const Size.fromHeight(100),
         child: ClipRect(
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
             child: Container(
-              padding: EdgeInsets.fromLTRB(
-                MediaQuery.of(context).size.width * 0.04,
-                MediaQuery.of(context).padding.top + 8,
-                MediaQuery.of(context).size.width * 0.03,
-                6
-              ),
+              padding: const EdgeInsets.fromLTRB(16, 10, 12, 6),
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
                   colors: [Color.fromRGBO(255, 255, 255, 0.12), Color.fromRGBO(255, 255, 255, 0.06)],
@@ -190,22 +220,106 @@ class AppScaffold extends StatelessWidget {
       body: child,
 
 
-      /// 🍥 Custom BottomNavigationBar with pill-shaped active tabs
+      /// 🍥 BottomNavigationBar with glowing frosted active tab
       bottomNavigationBar: hideNavigationBar
           ? null
-          : CustomBottomNavBar(
-              currentIndex: currentIndex,
-              items: items,
-              onTap: (index) {
-                if (index == 2) {
-                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ChatPage()));
-                } else if (isAdmin && index == 4) {
-                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AdminDashboard()));
-                } else {
-                  onTabSelected(index);
-                }
-              },
-            ),
+          : Container(
+              margin: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+              child: SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(26),
+                  child: Stack(
+                    children: [
+                      // 🧊 Full frosted nav bar background with border
+                      BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                        child: Container(
+                          height: 66,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(26),
+                            // ✅ BLACK outline for full nav bar — adjust color here
+                            border: Border.all(color: Colors.black.withOpacity(0.15), width: 1.3),
+                            gradient: const LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                Color.fromRGBO(255, 255, 255, 0.1),
+                                Color.fromRGBO(255, 255, 255, 0.05),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      // 📦 Navigation bar content
+                      SizedBox(
+                        height: 66,
+                        child: BottomNavigationBar(
+                          currentIndex: currentIndex,
+                          backgroundColor: Colors.transparent,
+                          elevation: 0,
+                          type: BottomNavigationBarType.fixed,
+                          selectedItemColor: const Color(0xFF1A233D),
+                          unselectedItemColor: const Color(0xFF1A233D).withOpacity(0.5),
+                          selectedLabelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                          unselectedLabelStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
+                          onTap: (index) {
+                            if (index == 2) {
+                              Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ChatPage()));
+                            } else if (isAdmin && index == 4) {
+                              Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AdminDashboard()));
+                            } else {
+                              onTabSelected(index);
+                            }
+                          },
+                          items: items.mapIndexed((i, item) {
+                            final isSelected = i == currentIndex;
+                            return BottomNavigationBarItem(
+                              label: item.label,
+                              icon: AnimatedContainer(
+                                duration: const Duration(milliseconds: 250),
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                decoration: isSelected
+                                    ? BoxDecoration(
+                                  color: Colors.white.withOpacity(0.25), // More glassy effect
+                                  borderRadius: BorderRadius.circular(24),
+                                  border: Border.all(
+                                    color: Colors.white.withOpacity(0.35),
+                                    width: 1.0,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.08),
+                                      blurRadius: 16,
+                                      offset: const Offset(0, 6),
+                                    ),
+                                  ],
+                                )
+                                    : null,
+
+                                child: IconTheme(
+                                  data: IconThemeData(
+                                    color: isSelected
+                                        ? const Color(0xFF1A233D) // ✅ Active icon color
+                                        : const Color(0xFF1A233D).withOpacity(0.5), // Inactive icon color
+                                    size: 22,
+                                  ),
+                                  child: item.icon,
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    ],
+
+                  ),
+              ),
+           ),
+      ),
+      )
 
 
 

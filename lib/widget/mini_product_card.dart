@@ -24,7 +24,7 @@ class MiniProductCard extends StatelessWidget {
         height: 160,
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(15),
           boxShadow: [
             BoxShadow(
               color: Colors.black12,
@@ -34,7 +34,7 @@ class MiniProductCard extends StatelessWidget {
           ],
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(15),
           child: Stack(
             children: [
               Padding(
@@ -42,11 +42,10 @@ class MiniProductCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // 🖼️ Product Image
                     AspectRatio(
                       aspectRatio: 1,
                       child: ClipRRect(
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(15),
                         child: Image.network(
                           product.imageUrl,
                           fit: BoxFit.contain,
@@ -57,7 +56,6 @@ class MiniProductCard extends StatelessWidget {
 
                     const SizedBox(height: 4),
 
-                    // 🧾 Name
                     Text(
                       product.name,
                       maxLines: 1,
@@ -69,7 +67,6 @@ class MiniProductCard extends StatelessWidget {
                       ),
                     ),
 
-                    // 💸 Price (strike if on sale)
                     if (isSale)
                       Text(
                         '€${product.price.toStringAsFixed(2)}',
@@ -94,7 +91,6 @@ class MiniProductCard extends StatelessWidget {
                 ),
               ),
 
-              // 🟥 SALE badge (optional)
               if (isSale)
                 Positioned(
                   top: 6,
@@ -116,7 +112,6 @@ class MiniProductCard extends StatelessWidget {
                   ),
                 ),
 
-              // ➕ Add to cart button (smaller)
               Positioned(
                 bottom: 6,
                 right: 6,
@@ -127,7 +122,7 @@ class MiniProductCard extends StatelessWidget {
                     height: 24,
                     decoration: BoxDecoration(
                       color: const Color(0xFF1A2D3D),
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(15),
                     ),
                     child: const Icon(
                       Icons.add,
@@ -144,3 +139,4 @@ class MiniProductCard extends StatelessWidget {
     );
   }
 }
+

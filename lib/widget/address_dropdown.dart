@@ -58,14 +58,12 @@ class _AddressDropdownState extends State<AddressDropdown> {
     final Offset offset = renderBox.localToGlobal(Offset.zero);
     final Size size = renderBox.size;
 
-    // Get exact positions of app bar and bottom nav
     final appBarBottom = Scaffold.of(context).appBarMaxHeight!;
     final bottomNavTop = MediaQuery.of(context).size.height - kBottomNavigationBarHeight;
 
     dropdownOverlay = OverlayEntry(
       builder: (context) => Stack(
         children: [
-          // 1. Blur ONLY between app bar and bottom nav
           Positioned(
             top: appBarBottom,
             left: 0,
@@ -79,8 +77,6 @@ class _AddressDropdownState extends State<AddressDropdown> {
               ),
             ),
           ),
-
-          // 2. Existing dropdown (unchanged)
           Positioned(
             top: offset.dy + size.height + 6,
             left: offset.dx,
@@ -91,7 +87,7 @@ class _AddressDropdownState extends State<AddressDropdown> {
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(15),
                   boxShadow: [
                     BoxShadow(
                       color: Colors.black.withOpacity(0.1),
@@ -139,11 +135,11 @@ class _AddressDropdownState extends State<AddressDropdown> {
                                 builder: (context) => const PickLocationPage()),
                           );
                         },
-                        icon: const Icon(Icons.add, size: 16), // Keep your icon
+                        icon: const Icon(Icons.add, size: 16),
                         label: const Text("Add new Address"),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF0D2952), // Original color
-                          foregroundColor: Colors.white, // Original text color
+                          backgroundColor: const Color(0xFF0D2952),
+                          foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 12),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8),
@@ -162,6 +158,7 @@ class _AddressDropdownState extends State<AddressDropdown> {
 
     overlay.insert(dropdownOverlay!);
   }
+
   void _removeDropdown() {
     dropdownOverlay?.remove();
     dropdownOverlay = null;
@@ -210,3 +207,4 @@ class _AddressDropdownState extends State<AddressDropdown> {
     );
   }
 }
+

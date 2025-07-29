@@ -23,7 +23,7 @@ class ProductCard extends StatelessWidget {
         height: 260,
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(15),
           boxShadow: [
             BoxShadow(
               color: Colors.black12,
@@ -32,8 +32,8 @@ class ProductCard extends StatelessWidget {
             )
           ],
         ),
-        child: ClipRRect( // ✅ Prevents visual overflow completely
-          borderRadius: BorderRadius.circular(16),
+                      child: ClipRRect(
+          borderRadius: BorderRadius.circular(15),
           child: Stack(
             children: [
               Padding(
@@ -42,21 +42,18 @@ class ProductCard extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.start,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // 🖼️ Image
                     AspectRatio(
                       aspectRatio: 1,
                       child: ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(15),
                         child: Image.network(
                           product.imageUrl,
                           fit: BoxFit.contain,
                           errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, size: 40),
-                        ),
+                    ),
                       ),
                     ),
                     const SizedBox(height: 6),
-
-                    // 🧾 Name
                     Text(
                       product.name,
                       maxLines: 1,
@@ -67,8 +64,6 @@ class ProductCard extends StatelessWidget {
                         color: Colors.black,
                       ),
                     ),
-
-                    // 📦 Variant
                     Text(
                       product.formattedVariants,
                       maxLines: 1,
@@ -78,8 +73,6 @@ class ProductCard extends StatelessWidget {
                         color: Colors.grey[600],
                       ),
                     ),
-
-                    // 💸 Price
                     if (isSale)
                       Text(
                         '€${product.price.toStringAsFixed(2)}',
@@ -104,8 +97,6 @@ class ProductCard extends StatelessWidget {
                   ],
                 ),
               ),
-
-              // 🟥 SALE tag
               if (isSale)
                 Positioned(
                   top: 8,
@@ -126,8 +117,6 @@ class ProductCard extends StatelessWidget {
                     ),
                   ),
                 ),
-
-              // ➕ Button
               Positioned(
                 bottom: 8,
                 right: 8,
@@ -138,7 +127,7 @@ class ProductCard extends StatelessWidget {
                     height: 28,
                     decoration: BoxDecoration(
                       color: const Color(0xFF1A2D3D),
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(15),
                     ),
                     child: const Icon(
                       Icons.add,
@@ -155,3 +144,4 @@ class ProductCard extends StatelessWidget {
     );
   }
 }
+

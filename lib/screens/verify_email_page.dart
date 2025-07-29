@@ -99,7 +99,7 @@ class _VerifyEmailPageState extends State<VerifyEmailPage> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.redAccent,
                       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
                     ),
                   ),
                   if (_errorOccurred)
@@ -120,3 +120,4 @@ class _VerifyEmailPageState extends State<VerifyEmailPage> {
     );
   }
 }
+
