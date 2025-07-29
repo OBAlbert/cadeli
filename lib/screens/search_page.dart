@@ -1,11 +1,12 @@
+import 'package:flutter/material.dart';
 import 'package:cadeli/models/product.dart';
 import 'package:cadeli/screens/product_detail_page.dart';
 import 'package:cadeli/services/woocommerce_service.dart';
+import 'package:cadeli/widget/product_card.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/material.dart';
-import 'package:cadeli/widget/product_card.dart';
-import '../widget/app_scaffold.dart';
+import 'package:cadeli/widget/mini_product_card.dart';
+
 
 class SearchPage extends StatefulWidget {
   const SearchPage({super.key});
@@ -16,16 +17,17 @@ class SearchPage extends StatefulWidget {
 
 class _SearchPageState extends State<SearchPage> {
   final WooCommerceService wooService = WooCommerceService();
+  final TextEditingController _searchController = TextEditingController();
+
   List<Product> allProducts = [];
   List<Product> filteredProducts = [];
   List<Product> recentViewed = [];
 
   bool isLoading = true;
   String? error;
-  String searchQuery = '';
   bool showRecentlyViewed = true;
 
-  final List<String> keywords = ['Mineral', 'Sparkling', 'ITEO', 'Evian', 'Glass']; // ✅ Keywords List
+  final List<String> keywords = ['Mineral', 'Sparkling', 'ITEO', 'Evian Glass'];
 
   @override
   void initState() {
@@ -33,6 +35,7 @@ class _SearchPageState extends State<SearchPage> {
     fetchProducts();
   }
 
+  // Fetch all products from WooCommerce
   Future<void> fetchProducts() async {
     try {
       final raw = await wooService.fetchProducts();
@@ -51,9 +54,9 @@ class _SearchPageState extends State<SearchPage> {
     }
   }
 
+  // Handle search logic
   void onSearch(String query) {
     setState(() {
-      searchQuery = query;
       if (query.isEmpty) {
         filteredProducts = allProducts;
       } else {
@@ -66,10 +69,7 @@ class _SearchPageState extends State<SearchPage> {
     });
   }
 
-  void onKeywordTap(String keyword) {
-    onSearch(keyword); // ✅ Keyword pill tap triggers search
-  }
-
+  // Fetch recently viewed product list from Firestore
   Future<void> fetchRecentlyViewed(List<Product> products) async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
@@ -79,14 +79,18 @@ class _SearchPageState extends State<SearchPage> {
 
     if (recentList != null) {
       final List<Product> fetched = [];
-      for (var id in recentList.reversed.toList()) {
-        final match = products.firstWhere((p) => p.id == id.toString(), orElse: () => Product.empty());
-        if (!match.isEmpty()) fetched.add(match);
+      for (var id in recentList.reversed) {
+        final match = products.firstWhere(
+              (p) => p.id == id.toString(),
+          orElse: () => Product.empty(),
+        );
+        if (!match.isEmpty) fetched.add(match);
       }
       setState(() => recentViewed = fetched);
     }
   }
 
+  // Add a product to recently viewed list in Firestore
   Future<void> addToRecentlyViewed(String productId) async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
@@ -105,115 +109,137 @@ class _SearchPageState extends State<SearchPage> {
 
   @override
   Widget build(BuildContext context) {
-    return AppScaffold(
-      currentIndex: 1,
-      onTabSelected: (index) {
-        Navigator.of(context).popUntil((route) => route.isFirst);
-      },
-      child: SafeArea(
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Color(0xFF1A233D)),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: const Text(
+          'Search',
+          style: TextStyle(
+            color: Color(0xFF1A233D),
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
+          ),
+        ),
+      ),
+      body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          padding: EdgeInsets.fromLTRB(
+            MediaQuery.of(context).size.width * 0.04,
+            8,
+            MediaQuery.of(context).size.width * 0.04,
+            0
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-
-              // ✅ Glassy Search Bar
+              // 🔍 Styled Search Bar (Rounded 15px, soft glass style)
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade200.withOpacity(0.6),
-                  borderRadius: BorderRadius.circular(28),
-                  border: Border.all(color: Colors.black12),
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(15),
+                  border: Border.all(color: Colors.grey.shade300),
                 ),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: TextField(
+                  controller: _searchController,
                   onChanged: onSearch,
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black),
                   decoration: const InputDecoration(
-                    hintText: 'Search products...',
-                    hintStyle: TextStyle(color: Colors.black54),
+                    hintText: 'Search anything...',
+                    hintStyle: TextStyle(
+                      color: Colors.black,
+                      fontWeight: FontWeight.bold,
+                    ),
                     border: InputBorder.none,
-                    icon: Icon(Icons.search, color: Colors.black54),
+                    icon: Icon(Icons.search, color: Colors.black),
                   ),
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
                 ),
               ),
 
               const SizedBox(height: 14),
 
-              // ✅ Keyword Chips
-              Wrap(
-                spacing: 8,
-                children: keywords.map((word) {
-                  return GestureDetector(
-                    onTap: () => onKeywordTap(word),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: const Color(0xFF1A2D3D)),
-                        borderRadius: BorderRadius.circular(30),
-                        color: Colors.white,
-                      ),
-                      child: Text(
-                        word,
-                        style: const TextStyle(color: Color(0xFF1A2D3D), fontWeight: FontWeight.w600),
+              // 🧃 Brand Filter Chips (Will show WooCommerce brands when implemented)
+              const SizedBox(height: 10),
+              SizedBox(
+                height: 60,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  children: [
+                    // Brand filters will be dynamically populated from WooCommerce product data
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey.shade300),
+                          borderRadius: BorderRadius.circular(15),
+                          color: Colors.white,
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        child: const Center(
+                          child: Text(
+                            'All Brands',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF1A233D),
+                            ),
+                          ),
+                        ),
                       ),
                     ),
-                  );
-                }).toList(),
+                    // More brand chips will be added dynamically from WooCommerce
+                  ],
+                ),
               ),
 
               const SizedBox(height: 18),
 
-              // ✅ Recently Viewed Toggle + Scroll
+              // 👁️ Recently Viewed Section (Toggleable)
               if (recentViewed.isNotEmpty) ...[
                 GestureDetector(
                   onTap: () => setState(() => showRecentlyViewed = !showRecentlyViewed),
-                  child: Row(
-                    children: const [
+                  child: const Row(
+                    children: [
                       Icon(Icons.remove_red_eye_outlined, color: Color(0xFF1A2D3D)),
                       SizedBox(width: 6),
-                      Text(
-                        'Recently Viewed',
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: Color(0xFF1A2D3D)),
-                      ),
+                      Text('Recently Viewed', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: Color(0xFF1A2D3D))),
                       Spacer(),
                       Icon(Icons.keyboard_arrow_down_rounded, color: Color(0xFF1A2D3D)),
                     ],
                   ),
                 ),
-
                 const SizedBox(height: 8),
-
                 AnimatedCrossFade(
                   duration: const Duration(milliseconds: 300),
                   crossFadeState: showRecentlyViewed
                       ? CrossFadeState.showFirst
                       : CrossFadeState.showSecond,
-                  firstChild: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade100,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    height: 160,
+                  firstChild: SizedBox(
+                    height: 180,
                     child: ListView.builder(
                       scrollDirection: Axis.horizontal,
                       itemCount: recentViewed.length,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
                       itemBuilder: (context, index) {
                         final product = recentViewed[index];
                         return Padding(
-                          padding: const EdgeInsets.only(left: 6, right: 12),
-                          child: SizedBox(
-                            width: 120, // ✅ Smaller square card
-                            child: ProductCard(
-                              product: product,
-                              onTap: () {
-                                addToRecentlyViewed(product.id);
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(builder: (_) => ProductDetailPage(product: product)),
-                                );
-                              },
-                            ),
+                          padding: const EdgeInsets.only(right: 12),
+                          child: MiniProductCard(
+                            product: product,
+                            onTap: () {
+                              addToRecentlyViewed(product.id);
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => ProductDetailPage(product: product),
+                                ),
+                              );
+                            },
                           ),
                         );
                       },
@@ -221,30 +247,34 @@ class _SearchPageState extends State<SearchPage> {
                   ),
                   secondChild: const SizedBox.shrink(),
                 ),
-
-                const SizedBox(height: 16),
-                const Divider(height: 1, color: Colors.black26),
-                const SizedBox(height: 4),
-                const Text('Results:',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF1A2D3D))),
-                const SizedBox(height: 8),
+                const Divider(height: 24),
               ],
 
-              // ✅ Search Results Grid
+              const Text(
+                'Results:',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1A2D3D)),
+              ),
+              const SizedBox(height: 8),
+
+              // 📦 Product Results Grid
               Expanded(
                 child: isLoading
                     ? const Center(child: CircularProgressIndicator())
                     : error != null
                     ? Center(child: Text('Error: $error'))
                     : GridView.builder(
-                  itemCount: filteredProducts.length,
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
+                  padding: EdgeInsets.only(
+                    bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+                    left: MediaQuery.of(context).size.width * 0.01,
+                    right: MediaQuery.of(context).size.width * 0.01,
+                  ),
+                  gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+                    maxCrossAxisExtent: MediaQuery.of(context).size.width > 600 ? 280 : 200,
                     crossAxisSpacing: 16,
                     mainAxisSpacing: 16,
-                    childAspectRatio: 0.75,
+                    childAspectRatio: MediaQuery.of(context).size.width > 600 ? 0.75 : 0.72,
                   ),
-                  padding: const EdgeInsets.only(bottom: 16),
+                  itemCount: filteredProducts.length,
                   itemBuilder: (context, index) {
                     final product = filteredProducts[index];
                     return ProductCard(
@@ -253,7 +283,9 @@ class _SearchPageState extends State<SearchPage> {
                         addToRecentlyViewed(product.id);
                         Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (_) => ProductDetailPage(product: product)),
+                          MaterialPageRoute(
+                            builder: (_) => ProductDetailPage(product: product),
+                          ),
                         );
                       },
                     );

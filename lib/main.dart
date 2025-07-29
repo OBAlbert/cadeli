@@ -14,6 +14,7 @@ import 'screens/verify_email_page.dart';
 import 'screens/start_page.dart';
 import 'screens/index_page.dart';
 import 'screens/pick_location_page.dart';
+import 'services/notification_service.dart';
 
 
 void main() async {
@@ -28,6 +29,8 @@ void main() async {
   } catch (e) {
     print('Firebase already initialized: $e');
   }
+
+  await NotificationService.initialize();
 
   runApp(const MyApp());
 }

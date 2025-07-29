@@ -68,14 +68,19 @@ class _ProductsPageState extends State<ProductsPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // 🔵 PAGE TITLE
-            const Padding(
-              padding: EdgeInsets.fromLTRB(20, 16, 20, 10),
+            Padding(
+              padding: EdgeInsets.fromLTRB(
+                MediaQuery.of(context).size.width * 0.05,
+                MediaQuery.of(context).size.height * 0.02,
+                MediaQuery.of(context).size.width * 0.05,
+                10
+              ),
               child: Text(
                 'Products',
                 style: TextStyle(
-                  fontSize: 24,
+                  fontSize: MediaQuery.of(context).size.width > 400 ? 24 : 20,
                   fontWeight: FontWeight.w800,
-                  color: Color(0xFF1A2D3D),
+                  color: const Color(0xFF1A2D3D),
                 ),
               ),
             ),
@@ -83,7 +88,9 @@ class _ProductsPageState extends State<ProductsPage> {
             // 🟣 CATEGORY FILTER TABS
             Container(
               height: 50,
-              margin: const EdgeInsets.symmetric(horizontal: 12),
+              margin: EdgeInsets.symmetric(
+                horizontal: MediaQuery.of(context).size.width * 0.03,
+              ),
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 itemCount: categories.length,
@@ -94,17 +101,20 @@ class _ProductsPageState extends State<ProductsPage> {
                   return GestureDetector(
                     onTap: () => filterByCategory(cat),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: MediaQuery.of(context).size.width * 0.05,
+                        vertical: 10,
+                      ),
                       decoration: BoxDecoration(
                         color: isSelected ? const Color(0xFF1A2D3D) : Colors.white,
-                        borderRadius: BorderRadius.circular(30),
+                        borderRadius: BorderRadius.circular(15),
                         border: Border.all(color: const Color(0xFF1A2D3D), width: 1.5),
                       ),
                       child: Text(
                         cat,
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
-                          fontSize: 14,
+                          fontSize: MediaQuery.of(context).size.width > 360 ? 14 : 12,
                           color: isSelected ? Colors.white : Colors.black,
                         ),
                       ),
@@ -124,13 +134,14 @@ class _ProductsPageState extends State<ProductsPage> {
                   ? Center(child: Text('Error: $error'))
                   : GridView.builder( // <-- Wrap in GridView.builder
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      crossAxisSpacing: 16,
-                      mainAxisSpacing: 16,
-                      childAspectRatio: 0.75,
-                    ),
-                    itemCount: filteredProducts.length,
+                      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                        maxCrossAxisExtent: 240, // adapts columns automatically
+                        mainAxisExtent: 260,     // controls height per card
+                        crossAxisSpacing: 16,
+                        mainAxisSpacing: 16,
+                      ),
+
+                itemCount: filteredProducts.length,
                     itemBuilder: (context, index) {
                     final product = filteredProducts[index];
                     return ProductCard(

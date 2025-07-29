@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import '../models/product.dart';
 
-class ProductCard extends StatelessWidget {
+class MiniProductCard extends StatelessWidget {
   final Product product;
   final VoidCallback? onTap;
   final VoidCallback? onAddTap;
 
-  const ProductCard({
+  const MiniProductCard({
     super.key,
     required this.product,
     this.onTap,
@@ -20,41 +20,42 @@ class ProductCard extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        height: 260,
+        width: 110,
+        height: 160,
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(12),
           boxShadow: [
             BoxShadow(
               color: Colors.black12,
-              blurRadius: 6,
-              offset: Offset(0, 3),
+              blurRadius: 4,
+              offset: Offset(0, 2),
             )
           ],
         ),
-        child: ClipRRect( // ✅ Prevents visual overflow completely
-          borderRadius: BorderRadius.circular(16),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
           child: Stack(
             children: [
               Padding(
-                padding: const EdgeInsets.all(8),
+                padding: const EdgeInsets.all(6),
                 child: Column(
-                  mainAxisAlignment: MainAxisAlignment.start,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // 🖼️ Image
+                    // 🖼️ Product Image
                     AspectRatio(
                       aspectRatio: 1,
                       child: ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(10),
                         child: Image.network(
                           product.imageUrl,
                           fit: BoxFit.contain,
-                          errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, size: 40),
+                          errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, size: 30),
                         ),
                       ),
                     ),
-                    const SizedBox(height: 6),
+
+                    const SizedBox(height: 4),
 
                     // 🧾 Name
                     Text(
@@ -62,41 +63,29 @@ class ProductCard extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontSize: 14,
+                        fontSize: 13,
                         fontWeight: FontWeight.bold,
                         color: Colors.black,
                       ),
                     ),
 
-                    // 📦 Variant
-                    Text(
-                      product.formattedVariants,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[600],
-                      ),
-                    ),
-
-                    // 💸 Price
+                    // 💸 Price (strike if on sale)
                     if (isSale)
                       Text(
                         '€${product.price.toStringAsFixed(2)}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                          fontSize: 12,
+                          fontSize: 11,
                           decoration: TextDecoration.lineThrough,
                           color: Colors.grey,
                         ),
                       ),
+
                     Text(
                       product.displayPrice,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        fontSize: 14,
+                        fontSize: 13,
                         fontWeight: FontWeight.bold,
                         color: isSale ? Colors.red : Colors.black,
                       ),
@@ -105,13 +94,13 @@ class ProductCard extends StatelessWidget {
                 ),
               ),
 
-              // 🟥 SALE tag
+              // 🟥 SALE badge (optional)
               if (isSale)
                 Positioned(
-                  top: 8,
-                  left: 8,
+                  top: 6,
+                  left: 6,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                     decoration: BoxDecoration(
                       color: Colors.red[400],
                       borderRadius: BorderRadius.circular(4),
@@ -120,30 +109,30 @@ class ProductCard extends StatelessWidget {
                       'SALE',
                       style: TextStyle(
                         color: Colors.white,
-                        fontSize: 10,
+                        fontSize: 9,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                   ),
                 ),
 
-              // ➕ Button
+              // ➕ Add to cart button (smaller)
               Positioned(
-                bottom: 8,
-                right: 8,
+                bottom: 6,
+                right: 6,
                 child: GestureDetector(
                   onTap: onAddTap,
                   child: Container(
-                    width: 28,
-                    height: 28,
+                    width: 24,
+                    height: 24,
                     decoration: BoxDecoration(
                       color: const Color(0xFF1A2D3D),
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(12),
                     ),
                     child: const Icon(
                       Icons.add,
                       color: Colors.white,
-                      size: 16,
+                      size: 14,
                     ),
                   ),
                 ),

@@ -68,17 +68,6 @@ class _HomePageState extends State<HomePage> {
     return Stack(
       children: [
         // 🟦 Background image from AppBar-down to bottom
-        Positioned.fill(
-          top: kToolbarHeight + MediaQuery.of(context).padding.top,
-          child: Container(
-            decoration: const BoxDecoration(
-              image: DecorationImage(
-                image: AssetImage('assets/background/start_background.jpg'),
-                fit: BoxFit.cover,
-              ),
-            ),
-          ),
-        ),
 
         // 🟩 Foreground scroll content
         SingleChildScrollView(
@@ -140,7 +129,7 @@ class _HomePageState extends State<HomePage> {
                     Text(
                       "We provide sustainable, clean, and affordable water. Delivered to your home every week. No stress, just hydration.",
                       style: TextStyle(
-                        color: Colors.white70,
+                        color: Colors.black,
                         fontSize: 16,
                         height: 1.4,
                       ),
@@ -163,13 +152,6 @@ class _HomePageState extends State<HomePage> {
                   padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                   textStyle: const TextStyle(fontSize: 16),
                 ),
-              ),
-
-              ElevatedButton(
-                onPressed: () async {
-                  await SyncService.syncWooProductsToFirestore();
-                },
-                child: Text('Sync Woo to Firestore'),
               ),
 
 
