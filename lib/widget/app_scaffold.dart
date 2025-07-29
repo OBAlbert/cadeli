@@ -48,65 +48,56 @@ class AppScaffold extends StatelessWidget {
   Widget build(BuildContext context) {
     final items = [
       BottomNavigationBarItem(
-        icon: Padding(
-          padding: const EdgeInsets.only(top: 4),
-          child: Image.asset(
-            'assets/icons/home_icon.png',
-            height: 24,
-            width: 24,
-          ),
+        icon: Image.asset(
+          'assets/icons/home_icon.png',
+          height: 30,
+          width: 30,
+          fit: BoxFit.contain,
         ),
-        label: "Home",
+        label: 'Home',
       ),
       BottomNavigationBarItem(
-        icon: Padding(
-          padding: const EdgeInsets.only(top: 4),
-          child: Image.asset(
-            'assets/icons/product_icon.png',
-            height: 24,
-            width: 24,
-          ),
+        icon: Image.asset(
+          'assets/icons/product_icon.png',
+          height: 30,
+          width: 30,
+          fit: BoxFit.contain,
         ),
-        label: "Products",
+        label: 'Products',
       ),
       BottomNavigationBarItem(
-        icon: Padding(
-          padding: const EdgeInsets.only(top: 4),
-          child: Image.asset(
-            'assets/icons/chat_icon.png',
-            height: 24,
-            width: 24,
-          ),
+        icon: Image.asset(
+          'assets/icons/chat_icon.png',
+          height: 30,
+          width: 30,
+          fit: BoxFit.contain,
         ),
-        label: "Messages",
+        label: 'Messages',
       ),
       BottomNavigationBarItem(
-        icon: Padding(
-          padding: const EdgeInsets.only(top: 4),
-          child: Image.asset(
-            'assets/icons/profile_icon.png',
-            height: 24,
-            width: 24,
-          ),
+        icon: Image.asset(
+          'assets/icons/profile_icon.png',
+          height: 30,
+          width: 30,
+          fit: BoxFit.contain,
         ),
-        label: "Profile",
+        label: 'Profile',
       ),
     ];
 
 
 
+
     if (isAdmin) {
-      items.add(BottomNavigationBarItem(
-        icon: Padding(
-          padding: const EdgeInsets.only(top: 4),
-          child: Icon(
-            Icons.admin_panel_settings_outlined,
-            size: 24,
-          ),
+      items.add(
+        const BottomNavigationBarItem(
+          icon: Icon(Icons.admin_panel_settings_outlined, size: 30),
+          label: 'Admin',
         ),
-        label: "Admin",
-      ));
+      );
     }
+
+
 
     return Scaffold(
       extendBody: true,
@@ -229,7 +220,7 @@ class AppScaffold extends StatelessWidget {
                 child: Padding(
                   padding: const EdgeInsets.only(bottom: 4),
                 child: ClipRRect(
-                  borderRadius: BorderRadius.circular(26),
+                  borderRadius: BorderRadius.circular(15),
                   child: Stack(
                     children: [
                       // 🧊 Full frosted nav bar background with border
@@ -238,7 +229,7 @@ class AppScaffold extends StatelessWidget {
                         child: Container(
                           height: 66,
                           decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(26),
+                            borderRadius: BorderRadius.circular(15),
                             // ✅ BLACK outline for full nav bar — adjust color here
                             border: Border.all(color: Colors.black.withOpacity(0.15), width: 1.3),
                             gradient: const LinearGradient(
@@ -263,8 +254,8 @@ class AppScaffold extends StatelessWidget {
                           type: BottomNavigationBarType.fixed,
                           selectedItemColor: const Color(0xFF1A233D),
                           unselectedItemColor: const Color(0xFF1A233D).withOpacity(0.5),
-                          selectedLabelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                          unselectedLabelStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
+                          selectedLabelStyle: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, height: 1.1),
+                          unselectedLabelStyle: const TextStyle(fontSize: 8, fontWeight: FontWeight.w400, height: 1.1),
                           onTap: (index) {
                             if (index == 2) {
                               Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ChatPage()));
@@ -276,40 +267,7 @@ class AppScaffold extends StatelessWidget {
                           },
                           items: items.mapIndexed((i, item) {
                             final isSelected = i == currentIndex;
-                            return BottomNavigationBarItem(
-                              label: item.label,
-                              icon: AnimatedContainer(
-                                duration: const Duration(milliseconds: 250),
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                                decoration: isSelected
-                                    ? BoxDecoration(
-                                  color: Colors.white.withOpacity(0.25), // More glassy effect
-                                  borderRadius: BorderRadius.circular(24),
-                                  border: Border.all(
-                                    color: Colors.white.withOpacity(0.35),
-                                    width: 1.0,
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.08),
-                                      blurRadius: 16,
-                                      offset: const Offset(0, 6),
-                                    ),
-                                  ],
-                                )
-                                    : null,
-
-                                child: IconTheme(
-                                  data: IconThemeData(
-                                    color: isSelected
-                                        ? const Color(0xFF1A233D) // ✅ Active icon color
-                                        : const Color(0xFF1A233D).withOpacity(0.5), // Inactive icon color
-                                    size: 22,
-                                  ),
-                                  child: item.icon,
-                                ),
-                              ),
-                            );
+                            return item;
                           }).toList(),
                         ),
                       ),
