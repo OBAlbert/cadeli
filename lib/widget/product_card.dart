@@ -59,9 +59,9 @@ class ProductCard extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF1A2D3D),
                       ),
                     ),
                     Text(
@@ -122,19 +122,29 @@ class ProductCard extends StatelessWidget {
                 right: 8,
                 child: GestureDetector(
                   onTap: onAddTap,
-                  child: Container(
-                    width: 28,
-                    height: 28,
+                  child:
+                  Container(
+                    width: 32,
+                    height: 32,
                     decoration: BoxDecoration(
-                      color: const Color(0xFF1A2D3D),
-                      borderRadius: BorderRadius.circular(15),
+                      color: Colors.blue.shade100, // soft light blue
+                      borderRadius: BorderRadius.circular(7), // less circular, more square
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.05),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
                     ),
                     child: const Icon(
                       Icons.add,
-                      color: Colors.white,
-                      size: 16,
+                      color: Color(0xFF1A2D3D), // deep navy
+                      size: 20,
                     ),
                   ),
+
+
                 ),
               ),
             ],

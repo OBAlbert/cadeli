@@ -1,6 +1,7 @@
 //import 'package:cadeli/screens/admin_page.dart';
 import 'package:cadeli/screens/products_page.dart';
 import 'package:cadeli/screens/register_page.dart';
+import 'package:cadeli/screens/test_brand_scroll.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -62,6 +63,20 @@ class MyApp extends StatelessWidget {
       ),
     );
   }
+
+  // @override
+  // Widget build(BuildContext context) {
+  //   return MaterialApp(
+  //     title: 'Cadeli Test',
+  //     debugShowCheckedModeBanner: false,
+  //     theme: ThemeData(
+  //       primarySwatch: Colors.blue,
+  //       useMaterial3: true,
+  //     ),
+  //     home: const TestBrandScrollPage(), // 👈 Just swap this for now
+  //   );
+  // }
+
 }
 
 class StartToIndexRouter extends StatefulWidget {

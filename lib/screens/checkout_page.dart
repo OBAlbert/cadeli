@@ -10,6 +10,8 @@ import '../models/payment_method.dart';
 import '../widget/app_scaffold.dart';
 import 'main_page.dart';
 import 'order_success_page.dart';
+import '../services/woocommerce_service.dart';
+
 
 class CheckoutPage extends StatefulWidget {
   const CheckoutPage({super.key});
@@ -26,6 +28,8 @@ class _CheckoutPageState extends State<CheckoutPage> with SingleTickerProviderSt
   String selectedPayment = 'COD';
   Map<String, dynamic>? selectedAddress;
   List<Map<String, dynamic>> addressList = [];
+
+  final WooCommerceService wooService = WooCommerceService();
 
   late AnimationController _controller;
   late Animation<double> _tabAnimation;
@@ -66,57 +70,85 @@ class _CheckoutPageState extends State<CheckoutPage> with SingleTickerProviderSt
   Future<void> _placeOrder() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null || selectedAddress == null) return;
+
     final cart = Provider.of<CartProvider>(context, listen: false);
 
-    final orderData = {
-      'uid': user.uid,
-      'type': isSubscription ? 'subscription' : 'normal',
-      'timestamp': FieldValue.serverTimestamp(),
-      'payment': selectedPayment,
-      'status': 'pending',
-      'totalCost': cart.totalCost,
-      'items': cart.cartItems.map((item) => {
-        'productId': item['product'].id,
-        'name': item['product'].name,
-        'brand': item['product'].brand,
-        'price': item['product'].price,
-        'imageUrl': item['product'].imageUrl,
-        'quantity': item['quantity'],
-        'size': item['size'],
-        'package': item['package'],
-      }).toList(),
-      if (isSubscription) ...{
-        'frequency': selectedFrequency,
-        'day': selectedDay,
-        'address': selectedAddress,
-        'timeSlot': selectedTimeSlot,
-      },
+    // Inject email into address map so WooCommerce doesn't reject
+    selectedAddress = {
+      ...selectedAddress!,
+      'email': user.email ?? '',
     };
 
     try {
+      // 1. Create WooCommerce order (unpaid)
+
+      final wooService = WooCommerceService();
+      final wooOrder = await wooService.createWooOrder(
+        cart.cartItems.map((item) => item['product']).toList(),
+        selectedAddress!,
+        selectedPayment,
+        setPaid: false, // 🔴 Let admin set paid later
+      );
+
+      // Check if Woo order was created
+      if (wooOrder['id'] == null) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("Failed to create WooCommerce order"),
+        ));
+        return;
+      }
+
+      // 🔁 Fetch user's full name from Firestore
+      final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      final fullName = userDoc.data()?['fullName'] ?? 'No Name';
+
+
+      final orderData = {
+        'uid': user.uid,
+        'type': isSubscription ? 'subscription' : 'normal',
+        'timestamp': FieldValue.serverTimestamp(),
+        'payment': selectedPayment,
+        'status': 'pending',
+        'wooOrderId': wooOrder['id'], // ✅ save Woo order ID
+        'totalCost': cart.totalCost,
+        'userName': "${user.displayName ?? ''} - ${selectedAddress?['city'] ?? ''}",
+        'addressSummary': selectedAddress?['label'] ?? '',
+        'deliveryNotes': selectedAddress?['notes'] ?? '',
+        'name': fullName,
+        'adminStatusHistory': [
+          {
+            'status': 'pending',
+            'timestamp': FieldValue.serverTimestamp(),
+          }
+        ],
+        'items': cart.cartItems.map((item) => {
+          'productId': item['product'].id,
+          'name': item['product'].name,
+          'brand': item['product'].brand,
+          'price': item['product'].price,
+          'imageUrl': item['product'].imageUrl,
+          'quantity': item['quantity'],
+          'size': item['size'],
+          'pack': item['pack'],
+        }).toList(),
+      };
+
+      // 2. Save to Firestore
       await FirebaseFirestore.instance.collection('orders').add(orderData);
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
-        'lastOrder': orderData,
-      });
 
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text("Order placed! Waiting for admin approval"),
+      ));
+
+      // 3. Clear cart + navigate
       cart.clearCart();
+      Navigator.pushReplacementNamed(context, '/order_success');
 
-      if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (_) => OrderSuccessPage(
-              itemCount: cart.totalItems,
-              totalPrice: cart.totalCost,
-            ),
-          ),        );
-      }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to place order: $e')),
-        );
-      }
+      print("❌ Error placing order: $e");
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text("Something went wrong. Try again."),
+      ));
     }
   }
 
@@ -592,7 +624,6 @@ class _CheckoutPageState extends State<CheckoutPage> with SingleTickerProviderSt
     );
   }
 
-
   Widget _buildPaymentCard({required PaymentMethod method}) {
     String asset = 'visa.png';
     if (method.type == 'mastercard') asset = 'mastercard.png';
@@ -751,7 +782,6 @@ class _CheckoutPageState extends State<CheckoutPage> with SingleTickerProviderSt
       ),
     );
   }
-
 
 }
 

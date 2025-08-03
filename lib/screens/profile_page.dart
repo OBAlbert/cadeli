@@ -233,7 +233,7 @@ class _ProfilePageState extends State<ProfilePage> {
                     imageUrl: data['imageUrl'] ?? '',
                     sizeOptions: List<String>.from(data['sizeOptions'] ?? []),
                     packOptions: List<String>.from(data['packOptions'] ?? []),
-                    categories: List<String>.from(data['categories'] ?? []),
+                    categories: List<String>.from(data['categories'] ?? []), brandId: '',
                   );
 
                   return GestureDetector(

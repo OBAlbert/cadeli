@@ -10,6 +10,7 @@ class Product {
   final List<String> categories;
   final List<String> variants;
   final bool isFeatured;
+  final String brandId;
   int quantity;
 
   Product({
@@ -24,6 +25,7 @@ class Product {
     required this.categories,
     this.variants = const [],
     this.isFeatured = false,
+    required this.brandId,
     this.quantity = 1,
   });
 
@@ -38,7 +40,12 @@ class Product {
     return Product(
       id: json['id'].toString(),
       name: json['name'],
-      brand: json['name'], // Temporary - replace with actual brand field when available
+      brand: (json['brands'] as List?)?.isNotEmpty ?? false
+          ? json['brands'][0]['name']
+          : '',
+      brandId: (json['brands'] as List?)?.isNotEmpty ?? false
+          ? json['brands'][0]['id'].toString()
+          : '0',
       price: double.tryParse(json['price'].toString()) ?? 0.0,
       salePrice: json['sale_price']?.toString().isNotEmpty ?? false
           ? double.tryParse(json['sale_price'].toString())
@@ -48,9 +55,18 @@ class Product {
           : 'assets/products/default.jpg',
       sizeOptions: variants,
       packOptions: ['Single', '6-pack', '12-pack'],
+      // categories: (json['categories'] as List<dynamic>)
+      //     .map((cat) => cat['name']?.toString() ?? '')
+      //     .toList(),
       categories: (json['categories'] as List<dynamic>)
-          .map((cat) => cat['name'] as String)
-          .toList(),
+          .map((cat) {
+        final name = cat['name'];
+        if (name is! String) {
+          print('⚠️ BAD CATEGORY: $name (${name.runtimeType}) from product: ${json['name']}');
+        }
+        return name?.toString() ?? '';
+      }).toList(),
+
       variants: variants,
       isFeatured: json['featured'] ?? false,
     );
@@ -61,6 +77,7 @@ class Product {
       id: '',
       name: '',
       brand: '',
+      brandId: '0',
       price: 0.0,
       salePrice: null,
       imageUrl: '',

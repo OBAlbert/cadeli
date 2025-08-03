@@ -86,14 +86,18 @@ class AppScaffold extends StatelessWidget {
     ];
 
 
-
-
     if (isAdmin) {
       items.add(
-        const BottomNavigationBarItem(
-          icon: Icon(Icons.admin_panel_settings_outlined, size: 30),
+        BottomNavigationBarItem(
+          icon: Image.asset(
+            'assets/icons/admin_icon.png',
+            height: 30,
+            width: 30,
+            fit: BoxFit.contain,
+          ),
           label: 'Admin',
         ),
+
       );
     }
 
@@ -208,76 +212,66 @@ class AppScaffold extends StatelessWidget {
       ),
 
       /// 🧱 Main content
-      body: child,
+      // body: child,
+      //   body: Container(
+      //     color: Colors.greenAccent, // 👈 test background
+      //     child: child,
+      //   ),
+
+      body: Stack(
+        children: [
+          child, // 👈 The full screen content (product grid, etc.)
+          // Optional: Leave a gap at bottom if content touches nav bar
+        ],
+      ),
+
 
 
       /// 🍥 BottomNavigationBar with glowing frosted active tab
       bottomNavigationBar: hideNavigationBar
           ? null
           : Container(
-              margin: const EdgeInsets.fromLTRB(10, 0, 10, 8),
-              child: SafeArea(
-                child: Padding(
-                  padding: const EdgeInsets.only(bottom: 4),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(15),
-                  child: Stack(
-                    children: [
-                      // 🧊 Full frosted nav bar background with border
-                      BackdropFilter(
-                        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-                        child: Container(
-                          height: 66,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(15),
-                            // ✅ BLACK outline for full nav bar — adjust color here
-                            border: Border.all(color: Colors.black.withOpacity(0.15), width: 1.3),
-                            gradient: const LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [
-                                Color.fromRGBO(255, 255, 255, 0.1),
-                                Color.fromRGBO(255, 255, 255, 0.05),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-
-                      // 📦 Navigation bar content
-                      SizedBox(
-                        height: 66,
-                        child: BottomNavigationBar(
-                          currentIndex: currentIndex,
-                          backgroundColor: Colors.transparent,
-                          elevation: 0,
-                          type: BottomNavigationBarType.fixed,
-                          selectedItemColor: const Color(0xFF1A233D),
-                          unselectedItemColor: const Color(0xFF1A233D).withOpacity(0.5),
-                          selectedLabelStyle: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, height: 1.1),
-                          unselectedLabelStyle: const TextStyle(fontSize: 8, fontWeight: FontWeight.w400, height: 1.1),
-                          onTap: (index) {
-                            if (index == 2) {
-                              Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ChatPage()));
-                            } else if (isAdmin && index == 4) {
-                              Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AdminDashboard()));
-                            } else {
-                              onTabSelected(index);
-                            }
-                          },
-                          items: items.mapIndexed((i, item) {
-                            final isSelected = i == currentIndex;
-                            return item;
-                          }).toList(),
-                        ),
-                      ),
-                    ],
-
-                  ),
+        margin: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(15),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 0.01, sigmaY: 0.01), // invisible but enables real transparency
+            child: Container(
+              height: 66,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.10), // ✅ soft glassy fill
+                borderRadius: BorderRadius.circular(15),
+                border: Border.all(
+                  color: Colors.black.withOpacity(0.15),
+                  width: 1.3,
+                ),
               ),
-           ),
+              child: BottomNavigationBar(
+                currentIndex: currentIndex,
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                type: BottomNavigationBarType.fixed,
+                selectedItemColor: const Color(0xFF1A233D),
+                unselectedItemColor: const Color(0xFF1A233D).withOpacity(0.5),
+                selectedLabelStyle: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, height: 1.1),
+                unselectedLabelStyle: const TextStyle(fontSize: 8, fontWeight: FontWeight.w400, height: 1.1),
+                onTap: (index) {
+                  if (index == 2) {
+                    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ChatPage()));
+                  } else if (isAdmin && index == 4) {
+                    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AdminDashboard()));
+                  } else {
+                    onTabSelected(index);
+                  }
+                },
+                items: items,
+              ),
+            ),
+          ),
+        ),
       ),
-      )
+
+
 
 
 

@@ -25,7 +25,8 @@ class _PendingOrdersPageState extends State<PendingOrdersPage> {
         .where('status', isEqualTo: 'pending')
         .snapshots()
         .listen((snapshot) {
-      final orders = snapshot.docs.map((doc) {
+      final orders = snapshot.docs
+          .map((doc) {
         final data = doc.data();
         final GeoPoint? loc = data['location'];
         final dist = loc != null
@@ -41,7 +42,11 @@ class _PendingOrdersPageState extends State<PendingOrdersPage> {
           'distance': dist,
           'id': doc.id,
         };
-      }).toList();
+      })
+          .where((order) =>
+      (order['name'] ?? '').toString().trim().isNotEmpty &&
+          (order['address'] ?? '').toString().trim().isNotEmpty)
+          .toList();
 
       setState(() {
         _orders = _sortOrders(orders);
@@ -76,6 +81,7 @@ class _PendingOrdersPageState extends State<PendingOrdersPage> {
     return Scaffold(
       body: Column(
         children: [
+
           // MAP
           Container(
             height: MediaQuery.of(context).size.height * 0.45,
@@ -118,13 +124,17 @@ class _PendingOrdersPageState extends State<PendingOrdersPage> {
               children: [
                 const Text(
                   "Pending Orders",
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.black),
                 ),
                 DropdownButton<String>(
                   value: _sortBy,
                   items: const [
                     DropdownMenuItem(
-                        value: 'distance', child: Text("By Distance")),
+                        value: 'distance',
+                        child: Text(
+                          "By Distance",
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.black),
+                        )),
                     DropdownMenuItem(value: 'time', child: Text("By Time")),
                   ],
                   onChanged: (val) {
@@ -148,82 +158,157 @@ class _PendingOrdersPageState extends State<PendingOrdersPage> {
               itemCount: _orders.length,
               itemBuilder: (context, index) {
                 final order = _orders[index];
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 16),
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(18),
-                    boxShadow: const [
-                      BoxShadow(color: Colors.black12, blurRadius: 6)
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Name + Distance
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            order['name'] ?? '',
-                            style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                                color: Colors.black87),
-                          ),
-                          Text(
-                            "${(order['distance'] as double).toStringAsFixed(1)} km",
-                            style: const TextStyle(
-                                color: Colors.red,
-                                fontWeight: FontWeight.w600),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Text("📍 ${order['address'] ?? ''}",
-                          style: const TextStyle(
-                              fontSize: 14, color: Colors.black)),
-                      Text("☎️ ${order['number'] ?? ''}",
-                          style: const TextStyle(
-                              fontSize: 14, color: Colors.black)),
-                      if ((order['deliveryNotes'] ?? '')
-                          .toString()
-                          .trim()
-                          .isNotEmpty)
-                        Text("📝 ${order['deliveryNotes']}",
-                            style: const TextStyle(
-                                fontSize: 14, color: Colors.black)),
-                      Text("📦 ${order['status'] ?? ''}",
-                          style: const TextStyle(
-                              fontSize: 14, color: Colors.black)),
-                      if (order['timestamp'] != null)
-                        Text(
-                          "📅 ${DateFormat('MMM d, h:mm a').format((order['timestamp'] as Timestamp).toDate())}",
-                          style: const TextStyle(
-                              fontSize: 14, color: Colors.black54),
+
+                return GestureDetector(
+                  onTap: () => _showOrderDialog(order), // 📌 Tap opens full detail
+                  child:
+                   Container(
+                    margin: const EdgeInsets.only(bottom: 16), // Spacing between cards
+                    padding: const EdgeInsets.all(16), // Inner card padding
+                    decoration: BoxDecoration(
+                      color: Colors.white, // White background as per wireframe
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.grey.shade300), // Soft border
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Colors.black12,
+                          blurRadius: 4,
+                          offset: Offset(0, 2),
                         ),
-                      const SizedBox(height: 10),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.check_circle,
-                                color: Colors.green),
-                            onPressed: () =>
-                                _updateOrderStatus(order['id'], 'active'),
-                          ),
-                          const SizedBox(width: 8),
-                          IconButton(
-                            icon: const Icon(Icons.cancel, color: Colors.red),
-                            onPressed: () => _rejectOrder(order['id']),
-                          ),
-                        ],
-                      )
-                    ],
-                  ),
+                      ],
+                    ),
+                      child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // 🔹 Top row: User name (bold) and distance
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              order['name'] ?? '',
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black87,
+                              ),
+                            ),
+                            Text(
+                              "${(order['distance'] as double).toStringAsFixed(0)}km",
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black54,
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        const SizedBox(height: 6),
+
+                        // 🔹 Address row with pin icon
+                        Row(
+                          children: [
+                            const Icon(Icons.location_pin, color: Colors.red, size: 18),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                order['address'] ?? 'No address',
+                                style: const TextStyle(fontSize: 14, color: Colors.black87),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        const SizedBox(height: 4),
+
+                        // 🔹 Time slot row
+                        Row(
+                          children: [
+                            const Icon(Icons.access_time, size: 16, color: Colors.grey),
+                            const SizedBox(width: 6),
+                            Text(
+                              order['timeSlot'] ?? 'No time',
+                              style: const TextStyle(fontSize: 14, color: Colors.black87),
+                            ),
+                          ],
+                        ),
+
+                        const SizedBox(height: 4),
+
+                        // 🔹 Subscription type row
+                        Row(
+                          children: [
+                            const Icon(Icons.notifications_none, size: 16, color: Colors.grey),
+                            const SizedBox(width: 6),
+                            Text(
+                              order['subscription'] ?? 'no-subscription',
+                              style: const TextStyle(fontSize: 13, color: Colors.black54),
+                            ),
+                          ],
+                        ),
+
+                        const SizedBox(height: 12),
+
+                        // 🔹 Action buttons row
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            // ✅ Accept
+                            Container(
+                              decoration: BoxDecoration(
+                                color: Colors.green,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: IconButton(
+                                icon: const Icon(Icons.check, color: Colors.white),
+                                onPressed: () => _updateOrderStatus(order['id'], 'active'),
+                              ),
+                            ),
+
+                            const SizedBox(width: 8),
+
+                            // 💬 Chat / Info button
+                            Container(
+                              decoration: BoxDecoration(
+                                color: Colors.blueGrey,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: IconButton(
+                                onPressed: () => _showOrderDialog(order),
+                                icon: Image.asset(
+                                  'assets/icons/chat_icon.png',
+                                  width: 20,
+                                  height: 20,
+                                  color: Colors.white, // Apply white tint
+                                ),
+                              ),
+                            ),
+
+                            const SizedBox(width: 8),
+
+                            // ❌ Reject
+                            Container(
+                              decoration: BoxDecoration(
+                                color: Colors.red,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: IconButton(
+                                icon: const Icon(Icons.close, color: Colors.white),
+                                onPressed: () => _rejectOrder(order['id']),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+
+                    ),
+
+
+                   ),
                 );
-              },
+
+                },
             ),
           ),
         ],
@@ -277,7 +362,7 @@ class _PendingOrdersPageState extends State<PendingOrdersPage> {
                     const SizedBox(height: 12),
                     Text(order['name'] ?? 'No Name',
                         style: const TextStyle(
-                            color: Colors.white,
+                            color: Colors.black,
                             fontSize: 16,
                             fontWeight: FontWeight.bold)),
                     const SizedBox(height: 8),
@@ -308,6 +393,7 @@ class _PendingOrdersPageState extends State<PendingOrdersPage> {
                   ],
                 ),
               ),
+
               const SizedBox(height: 16),
               // Order Details Section
               Container(
@@ -429,4 +515,6 @@ class _PendingOrdersPageState extends State<PendingOrdersPage> {
       ),
     );
   }
+
+
 }

@@ -1,10 +1,15 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 
 class WooCommerceService {
-  final String baseUrl = 'https://lightsalmon-okapi-161109.hostingersite.com/'; // ✅ your WooCommerce URL
-  final String consumerKey = 'ck_d27a39b0086e946fbb734f7d61af026b11cfcb25';              // ✅ paste yours
-  final String consumerSecret = 'cs_92b4661b7f110883e3c2869a50b909d01114cea3';           // ✅ paste yours
+  final String baseUrl = 'https://lightsalmon-okapi-161109.hostingersite.com/';
+  final String consumerKey = 'ck_d27a39b0086e946fbb734f7d61af026b11cfcb25';
+  final String consumerSecret = 'cs_92b4661b7f110883e3c2869a50b909d01114cea3';
+
+  get image => null;           // ✅ paste yours
 
   Future<List<dynamic>> fetchProducts() async {
 
@@ -15,8 +20,16 @@ class WooCommerceService {
     final response = await http.get(url);
 
     if (response.statusCode == 200) {
-      final List products = json.decode(response.body);
-      return products;
+      try {
+        final List<dynamic> products = json.decode(response.body);
+        print("Fetched ${products.length} products");
+        return products;
+      } catch (e) {
+        print('JSON decode error: $e');
+        print('Raw response: ${response.body}');
+        throw Exception('Failed to parse products');
+      }
+
     } else {
       throw Exception('Failed to load products: ${response.statusCode}');
     }
@@ -37,24 +50,42 @@ class WooCommerceService {
     }
   }
 
-  Future<Map<String, dynamic>?> createOrder({
-    required String customerEmail,
-    required List<Map<String, dynamic>> lineItems,
-    required String paymentMethod,
-    required String paymentTitle,
-    required bool setPaid,
-  }) async {
+  Future<Map<String, dynamic>> createWooOrder(
+      List<dynamic> cartItems,
+      Map<String, dynamic> address,
+      String paymentMethod, {
+        bool setPaid = false,
+      }) async {
     final url = Uri.parse(
       '$baseUrl/wp-json/wc/v3/orders?consumer_key=$consumerKey&consumer_secret=$consumerSecret',
     );
 
-    final body = json.encode({
-      'payment_method': paymentMethod,
-      'payment_method_title': paymentTitle,
+    final lineItems = cartItems.map<Map<String, dynamic>>((item) {
+      return {
+        'product_id': int.tryParse(item.id) ?? 0,
+        'quantity': item.quantity,
+      };
+    }).toList();
+
+    final billingShipping = {
+      'first_name': (address['name'] ?? '').split(' ').first,
+      'last_name': (address['name'] ?? '').split(' ').skip(1).join(' '),
+      'address_1': address['line1'] ?? '',
+      'city': address['city'] ?? '',
+      'state': '',
+      'postcode': '',
+      'country': 'CY',
+      'email': address['email'] ?? '',
+      'phone': address['phone'] ?? '',
+
+    };
+
+    final body = jsonEncode({
+      'payment_method': paymentMethod.toLowerCase().replaceAll(' ', '_'),
+      'payment_method_title': paymentMethod,
       'set_paid': setPaid,
-      'billing': {
-        'email': customerEmail,
-      },
+      'billing': billingShipping,
+      'shipping': billingShipping,
       'line_items': lineItems,
     });
 
@@ -65,12 +96,66 @@ class WooCommerceService {
     );
 
     if (response.statusCode == 201) {
-      return json.decode(response.body);
+      final result = jsonDecode(response.body);
+      print("✅ Woo order created: ${result['id']}");
+      return result;
     } else {
-      print('Failed to create order: ${response.body}');
-      return null;
+      print("❌ Woo order failed: ${response.statusCode}");
+      print(response.body);
+      return {'status': 'failed'};
     }
   }
+
+  Future<bool> capturePaymentForOrder(int orderId) async {
+    final url = Uri.parse(
+      '$baseUrl/wp-json/wc/v3/orders/$orderId?consumer_key=$consumerKey&consumer_secret=$consumerSecret',
+    );
+
+    final response = await http.put(
+      url,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'set_paid': true}),
+    );
+
+    if (response.statusCode == 200) {
+      print("✅ Payment captured for order $orderId");
+      return true;
+    } else {
+      print("❌ Failed to capture payment: ${response.statusCode}");
+      print(response.body);
+      return false;
+    }
+  }
+
+
+
+  // 📡 Fetch brand images (as logo URLs)
+  Future<List<Map<String, String>>> fetchBrands() async {
+    final url = Uri.parse(
+      '$baseUrl/wp-json/wc/v3/products/brands?consumer_key=$consumerKey&consumer_secret=$consumerSecret',
+    );
+
+    final response = await http.get(url);
+
+    if (response.statusCode == 200) {
+      final List<dynamic> data = jsonDecode(response.body);
+      return data.map<Map<String, String>>((brand) {
+        final brandImage = brand['image'];
+        final String fullImageUrl = brandImage != null && brandImage['src'] != null
+            ? '$baseUrl${brandImage['src'].toString().replaceFirst(RegExp(r'^/'), '')}' // ensure no double slashes
+            : '';
+
+        return {
+          'id': brand['id'].toString(),
+          'name': brand['name'] ?? '',
+          'image': fullImageUrl,
+        };
+      }).toList();
+    } else {
+      throw Exception('❌ Failed to load brands: ${response.statusCode}');
+    }
+  }
+
 
 
 }

@@ -141,9 +141,9 @@ class _SearchPageState extends State<SearchPage> {
               // 🔍 Styled Search Bar (Rounded 15px, soft glass style)
               Container(
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: Colors.grey.shade700, // or .shade300 for slightly darker
                   borderRadius: BorderRadius.circular(15),
-                  border: Border.all(color: Colors.grey.shade300),
+                  border: Border.all(color: Colors.grey.shade600),
                 ),
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: TextField(

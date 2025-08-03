@@ -123,8 +123,9 @@ flutter:
     - assets/icons/visa.png
     - assets/icons/chat_icon.png
     - assets/icons/home_icon.png
-    - assets/icons/product_icon.png
     - assets/icons/profile_icon.png
+    - assets/icons/product_icon.png
+    - assets/icons/admin_icon.png
   #   - images/a_dot_burr.jpeg
   #   - images/a_dot_ham.jpeg
 
