@@ -3,7 +3,9 @@ import '../models/product.dart';
 import '../services/woocommerce_service.dart';
 import 'product_detail_page.dart';
 import '../widget/product_card.dart';
-import '../widget/brand_scroll_row.dart'; // ✅ add this
+import '../widget/brand_scroll_row.dart';
+import '../models/category.dart';
+
 
 
 class ProductsPage extends StatefulWidget {
@@ -19,8 +21,18 @@ class _ProductsPageState extends State<ProductsPage> {
   List<Product> filteredProducts = [];
   bool isLoading = true;
   String? error;
+  List<Category> allCategories = [];
+  int waterCategoryParentId = 96; // 🔧 Change this to your actual "Water Type" parent ID
 
-  List<String> categories = ['All', 'Sparkling', 'Spring', 'Uncategorized'];
+
+  List<String> get categories {
+    return [
+      'All',
+      ...allCategories
+          .where((c) => c.parent == waterCategoryParentId)
+          .map((c) => c.name)
+    ];
+  }
   String selectedCategory = 'All';
 
   List<Map<String, String>> brandList = [];       // ✅ brands from Woo
@@ -32,6 +44,7 @@ class _ProductsPageState extends State<ProductsPage> {
     super.initState();
     fetchProducts();
     fetchBrands();
+    fetchCategories();
   }
 
   Future<void> fetchProducts() async {
@@ -63,54 +76,21 @@ class _ProductsPageState extends State<ProductsPage> {
     }
   }
 
+  Future<void> fetchCategories() async {
+    try {
+      final fetched = await wooService.fetchBeverageTypeCategories(); // 🚀 only subcategories now
+      setState(() {
+        allCategories = fetched;
+      });
+    } catch (e) {
+      print("❌ Error fetching categories: $e");
+    }
+  }
 
-  // void filterByCategory(String category) {
-  //   setState(() {
-  //     selectedCategory = category;
-  //
-  //     if (category == 'All') {
-  //       if (selectedBrandId == null) {
-  //         filteredProducts = allProducts;
-  //       } else {
-  //         filteredProducts = allProducts.where((p) => p.brandId == selectedBrandId).toList();
-  //       }
-  //     } else {
-  //       filteredProducts = allProducts.where((p) {
-  //         final matchesCategory = p.categories.any(
-  //                 (c) => c.toLowerCase().contains(category.toLowerCase()));
-  //         final matchesBrand = selectedBrandId == null || p.brandId == selectedBrandId;
-  //
-  //         return matchesCategory && matchesBrand;
-  //       }).toList();
-  //     }
-  //   });
-  // }
-  //
-  // void filterByBrand(String? brandId) {
-  //   setState(() {
-  //     selectedBrandId = brandId;
-  //
-  //     if (brandId == null) {
-  //       // If no brand selected, just apply category filter
-  //       filterByCategory(selectedCategory);
-  //     } else {
-  //       filteredProducts = allProducts.where((p) {
-  //         // Check if product belongs to selected brand
-  //         final matchesBrand = p.brandId == brandId; // Assuming Product has brandId
-  //         // Also respect category filter
-  //         final matchesCategory = selectedCategory == 'All' ||
-  //             p.categories.any((c) => c.toLowerCase().contains(selectedCategory.toLowerCase()));
-  //
-  //         return matchesBrand && matchesCategory;
-  //       }).toList();
-  //     }
-  //   });
-  // }
-
-  void filterByCategory(String category) {
+  void filterByCategory(String cat) {
     setState(() {
-      selectedCategory = category;
-      applyCombinedFilters();
+      selectedCategory = cat;
+      applyCombinedFilters(); // ✅ apply combined filter instead
     });
   }
 
@@ -131,7 +111,9 @@ class _ProductsPageState extends State<ProductsPage> {
     filteredProducts = allProducts.where((p) {
       // Category filter
       final matchesCategory = selectedCategory == 'All' ||
-          p.categories.any((c) => c.toLowerCase().contains(selectedCategory.toLowerCase()));
+          allCategories
+              .where((cat) => p.categoryIds.contains(cat.id))
+              .any((cat) => cat.name.toLowerCase().contains(selectedCategory.toLowerCase()));
 
       // Brand filter
       final matchesBrand = selectedBrandId == null || p.brandId == selectedBrandId;

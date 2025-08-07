@@ -27,11 +27,12 @@ class SyncService {
         'id': product.id,
         'name': product.name,
         'brand': product.brand,
+        'brandId': product.brandId,
         'price': product.price,
+        'salePrice': product.salePrice,
         'imageUrl': product.imageUrl,
-        'sizeOptions': product.sizeOptions,
-        'packOptions': product.packOptions,
-        'categories': product.categories,
+        'categoryIds': product.categoryIds,
+        'isFeatured': product.isFeatured,
       });
     }
 

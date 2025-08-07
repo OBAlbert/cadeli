@@ -7,6 +7,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cadeli/widget/mini_product_card.dart';
 
+import '../models/Category.dart';
+
 
 class SearchPage extends StatefulWidget {
   const SearchPage({super.key});
@@ -23,6 +25,7 @@ class _SearchPageState extends State<SearchPage> {
   List<Product> filteredProducts = [];
   List<Product> recentViewed = [];
 
+
   bool isLoading = true;
   String? error;
   bool showRecentlyViewed = true;
@@ -33,6 +36,7 @@ class _SearchPageState extends State<SearchPage> {
   void initState() {
     super.initState();
     fetchProducts();
+
   }
 
   // Fetch all products from WooCommerce
@@ -62,12 +66,12 @@ class _SearchPageState extends State<SearchPage> {
       } else {
         filteredProducts = allProducts.where((p) {
           return p.name.toLowerCase().contains(query.toLowerCase()) ||
-              p.brand.toLowerCase().contains(query.toLowerCase()) ||
-              p.categories.any((c) => c.toLowerCase().contains(query.toLowerCase()));
+              p.brand.toLowerCase().contains(query.toLowerCase());
         }).toList();
       }
     });
   }
+
 
   // Fetch recently viewed product list from Firestore
   Future<void> fetchRecentlyViewed(List<Product> products) async {
@@ -141,9 +145,9 @@ class _SearchPageState extends State<SearchPage> {
               // 🔍 Styled Search Bar (Rounded 15px, soft glass style)
               Container(
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade700, // or .shade300 for slightly darker
+                  color: Colors.grey.shade300, // or .shade300 for slightly darker
                   borderRadius: BorderRadius.circular(15),
-                  border: Border.all(color: Colors.grey.shade600),
+                  border: Border.all(color: Colors.grey.shade500),
                 ),
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: TextField(
@@ -161,42 +165,6 @@ class _SearchPageState extends State<SearchPage> {
                   style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
                 ),
               ),
-
-              const SizedBox(height: 14),
-
-              // 🧃 Brand Filter Chips (Will show WooCommerce brands when implemented)
-              const SizedBox(height: 10),
-              SizedBox(
-                height: 60,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  children: [
-                    // Brand filters will be dynamically populated from WooCommerce product data
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 6),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          border: Border.all(color: Colors.grey.shade300),
-                          borderRadius: BorderRadius.circular(15),
-                          color: Colors.white,
-                        ),
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        child: const Center(
-                          child: Text(
-                            'All Brands',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF1A233D),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    // More brand chips will be added dynamically from WooCommerce
-                  ],
-                ),
-              ),
-
               const SizedBox(height: 18),
 
               // 👁️ Recently Viewed Section (Toggleable)

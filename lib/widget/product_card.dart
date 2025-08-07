@@ -64,36 +64,30 @@ class ProductCard extends StatelessWidget {
                         color: Color(0xFF1A2D3D),
                       ),
                     ),
-                    Text(
-                      product.formattedVariants,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[600],
-                      ),
-                    ),
-                    if (isSale)
-                      Text(
-                        '€${product.price.toStringAsFixed(2)}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          decoration: TextDecoration.lineThrough,
-                          color: Colors.grey,
+                    Row(
+                      children: [
+                        if (isSale)
+                          Text(
+                            '€${product.price.toStringAsFixed(2)}',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              decoration: TextDecoration.lineThrough,
+                              color: Colors.grey,
+                            ),
+                          ),
+                        if (isSale)
+                          const SizedBox(width: 6),
+                        Text(
+                          product.displayPrice,
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: isSale ? Colors.red : Colors.black,
+                          ),
                         ),
-                      ),
-                    Text(
-                      product.displayPrice,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: isSale ? Colors.red : Colors.black,
-                      ),
+                      ],
                     ),
+
                   ],
                 ),
               ),

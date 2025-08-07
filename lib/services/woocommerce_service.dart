@@ -3,6 +3,8 @@ import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../models/category.dart';
+
 
 class WooCommerceService {
   final String baseUrl = 'https://lightsalmon-okapi-161109.hostingersite.com/';
@@ -13,6 +15,7 @@ class WooCommerceService {
 
   Future<List<dynamic>> fetchProducts() async {
 
+
     final url = Uri.parse(
       '$baseUrl/wp-json/wc/v3/products?consumer_key=$consumerKey&consumer_secret=$consumerSecret&per_page=100',
     );
@@ -20,6 +23,7 @@ class WooCommerceService {
     final response = await http.get(url);
 
     if (response.statusCode == 200) {
+
       try {
         final List<dynamic> products = json.decode(response.body);
         print("Fetched ${products.length} products");
@@ -30,9 +34,11 @@ class WooCommerceService {
         throw Exception('Failed to parse products');
       }
 
+
     } else {
       throw Exception('Failed to load products: ${response.statusCode}');
     }
+
   }
 
   Future<Map<String, dynamic>?> fetchProductById(String id) async {
@@ -128,7 +134,6 @@ class WooCommerceService {
   }
 
 
-
   // 📡 Fetch brand images (as logo URLs)
   Future<List<Map<String, String>>> fetchBrands() async {
     final url = Uri.parse(
@@ -153,6 +158,76 @@ class WooCommerceService {
       }).toList();
     } else {
       throw Exception('❌ Failed to load brands: ${response.statusCode}');
+    }
+  }
+
+  Future<Map<String, String>?> fetchBrandById(String brandId) async {
+    final url = Uri.parse(
+      '$baseUrl/wp-json/wc/v3/products/brands/$brandId?consumer_key=$consumerKey&consumer_secret=$consumerSecret',
+    );
+
+    try {
+      final response = await http.get(url);
+
+      if (response.statusCode == 200) {
+        final brand = jsonDecode(response.body);
+
+        return {
+          'id': brand['id'].toString(),
+          'name': brand['name'] ?? '',
+          'image': brand['image'] != null && brand['image']['src'] != null
+              ? '$baseUrl${brand['image']['src'].toString().replaceFirst(RegExp(r'^/'), '')}'
+              : '',
+        };
+      } else {
+        print('❌ Failed to fetch brand: ${response.statusCode}');
+        return null;
+      }
+    } catch (e) {
+      print('❌ Error fetching brand by ID: $e');
+      return null;
+    }
+  }
+
+
+  Future<List<Category>> fetchCategories() async {
+    final url = Uri.parse(
+      '$baseUrl/wp-json/wc/v3/products/categories?consumer_key=$consumerKey&consumer_secret=$consumerSecret&per_page=100',
+    );
+
+    final response = await http.get(url);
+
+    print("🔍 Categories fetched:");
+
+    if (response.statusCode == 200) {
+      final List<dynamic> data = jsonDecode(response.body);
+      return data.map((item) => Category.fromJson(item)).toList();
+    } else {
+      throw Exception('❌ Failed to load categories: ${response.statusCode}');
+    }
+
+  }
+
+  // 📦 Fetch only 'Beverage Type' subcategories (parent = 96)
+  Future<List<Category>> fetchBeverageTypeCategories() async {
+    final url = Uri.parse(
+      '$baseUrl/wp-json/wc/v3/products/categories?consumer_key=$consumerKey&consumer_secret=$consumerSecret&parent=96&per_page=100',
+    );
+
+    try {
+      final response = await http.get(url);
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        print("✅ Beverage Type categories fetched: ${data.length}");
+        return data.map((item) => Category.fromJson(item)).toList();
+      } else {
+        print('❌ Failed to load beverage type categories: ${response.statusCode}');
+        return [];
+      }
+    } catch (e) {
+      print('❌ Error fetching beverage type categories: $e');
+      return [];
     }
   }
 

@@ -230,10 +230,15 @@ class _ProfilePageState extends State<ProfilePage> {
                     name: data['name'] ?? '',
                     brand: data['brand'] ?? '',
                     price: (data['price'] ?? 0).toDouble(),
+                    salePrice: (data['salePrice'] ?? 0).toDouble(),
                     imageUrl: data['imageUrl'] ?? '',
-                    sizeOptions: List<String>.from(data['sizeOptions'] ?? []),
-                    packOptions: List<String>.from(data['packOptions'] ?? []),
-                    categories: List<String>.from(data['categories'] ?? []), brandId: '',
+                    brandId: data['brandId'] ?? '',
+                    isFeatured: data['isFeatured'] ?? false,
+                    categoryIds: List<int>.from(data['categoryIds'] ?? []),
+                    categoryNames: [],
+                    categoryImages: [],
+                    categoryParents: [],
+                    brandImage: '',
                   );
 
                   return GestureDetector(

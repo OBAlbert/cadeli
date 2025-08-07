@@ -1,16 +1,23 @@
+import 'Category.dart';
+
 class Product {
   final String id;
   final String name;
   final String brand;
+
   final double price;
   final double? salePrice;
   final String imageUrl;
-  final List<String> sizeOptions;
-  final List<String> packOptions;
-  final List<String> categories;
-  final List<String> variants;
+  final List<int> categoryIds;
+  final List<String> categoryNames;
+  final List<String> categoryImages;
+  final List<int>? categoryParents;
+
+
+
   final bool isFeatured;
   final String brandId;
+  final String brandImage;
   int quantity;
 
   Product({
@@ -20,22 +27,26 @@ class Product {
     required this.price,
     this.salePrice,
     required this.imageUrl,
-    this.sizeOptions = const ['500ml', '1.5L'],
-    this.packOptions = const ['Single', '6-Pack'],
-    required this.categories,
-    this.variants = const [],
     this.isFeatured = false,
     required this.brandId,
     this.quantity = 1,
+    required this.categoryIds,
+    required this.categoryNames,
+    required this.categoryImages,
+    this.categoryParents,
+
+    required this.brandImage,
   });
 
   factory Product.fromWooJson(Map<String, dynamic> json) {
-    // Extract variants from WooCommerce attributes
-    final variants = json['attributes']?.isNotEmpty ?? false
-        ? (json['attributes'][0]['options'] as List<dynamic>)
-        .map((opt) => opt.toString())
-        .toList()
-        : ['0.5L', '1L', '1.5L'];
+    if ((json['brands'] as List?)?.isNotEmpty ?? false) {
+      print('✅ Brand image: ${json['brands'][0]['image']?['src']}');
+    }
+    // ✅ Calculate category data first
+    final categories = (json['categories'] as List<dynamic>)
+        .map((cat) => Category.fromJson(cat))
+        .toList();
+
 
     return Product(
       id: json['id'].toString(),
@@ -46,28 +57,25 @@ class Product {
       brandId: (json['brands'] as List?)?.isNotEmpty ?? false
           ? json['brands'][0]['id'].toString()
           : '0',
-      price: double.tryParse(json['price'].toString()) ?? 0.0,
+      brandImage: (json['brands'] as List?)?.isNotEmpty ?? false
+          ? Product._fixUrl(json['brands'][0]['image']?['src'] ?? '')
+          : '',
+
+      price: double.tryParse(json['regular_price'].toString()) ?? 0.0,
       salePrice: json['sale_price']?.toString().isNotEmpty ?? false
           ? double.tryParse(json['sale_price'].toString())
           : null,
       imageUrl: json['images'].isNotEmpty
           ? _fixUrl(json['images'][0]['src'])
           : 'assets/products/default.jpg',
-      sizeOptions: variants,
-      packOptions: ['Single', '6-pack', '12-pack'],
-      // categories: (json['categories'] as List<dynamic>)
-      //     .map((cat) => cat['name']?.toString() ?? '')
-      //     .toList(),
-      categories: (json['categories'] as List<dynamic>)
-          .map((cat) {
-        final name = cat['name'];
-        if (name is! String) {
-          print('⚠️ BAD CATEGORY: $name (${name.runtimeType}) from product: ${json['name']}');
-        }
-        return name?.toString() ?? '';
-      }).toList(),
 
-      variants: variants,
+      categoryIds: categories.map((cat) => cat.id).toList(),
+      categoryParents: categories.map((cat) => cat.parent ?? 0).toList(),
+      categoryNames: categories.map((cat) => cat.name).toList(),
+      categoryImages: categories.map((cat) => cat.imageUrl ?? 'assets/icons/default_icon.png').toList(),
+
+
+
       isFeatured: json['featured'] ?? false,
     );
   }
@@ -78,21 +86,22 @@ class Product {
       name: '',
       brand: '',
       brandId: '0',
+      brandImage: '',
+
       price: 0.0,
       salePrice: null,
       imageUrl: '',
-      categories: [],
-      variants: [],
+      categoryIds: [],
+      categoryParents: [],
+      categoryNames: [],
+      categoryImages: [],
+
     );
   }
 
   bool get isEmpty => id.isEmpty;
   bool get onSale => salePrice != null && salePrice! < price;
 
-  String get formattedVariants {
-    if (variants.isEmpty) return '0.5L, 1L, 1.5L';
-    return variants.join(', ');
-  }
 
   String get displayPrice {
     return onSale
@@ -101,7 +110,25 @@ class Product {
   }
 
   static String _fixUrl(String url) {
+    if (url.isEmpty) return '';
     if (url.startsWith('http')) return url;
+    if (!url.startsWith('/')) url = '/$url';
     return 'https://lightsalmon-okapi-161109.hostingersite.com$url';
   }
+
+  // 📦 Returns the packaging name based on categoryParents
+  String? get packagingName {
+    if (categoryParents == null || categoryNames.isEmpty) return null;
+    final index = categoryParents!.indexWhere((p) => p == 103);
+    return (index != -1 && index < categoryNames.length) ? categoryNames[index] : null;
+  }
+
+// 🖼️ Returns the packaging image based on categoryParents
+  String? get packagingImage {
+    if (categoryParents == null || categoryImages.isEmpty) return null;
+    final index = categoryParents!.indexWhere((p) => p == 103);
+    return (index != -1 && index < categoryImages.length) ? categoryImages[index] : null;
+  }
+
+
 }
