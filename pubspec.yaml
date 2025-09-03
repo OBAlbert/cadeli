@@ -47,6 +47,12 @@ dependencies:
   collection: ^1.18.0
   http: ^0.13.5
   font_awesome_flutter: ^9.2.0
+  cloud_functions: ^4.6.8
+  url_launcher: ^6.3.0
+  webview_flutter: ^4.5.0
+
+
+
   
   # Payment Processing
   flutter_stripe: ^9.4.0
@@ -111,6 +117,7 @@ flutter:
     - assets/coral_vid.mp4
     - assets/background/start_background.jpg
     - assets/background/startpic.jpg
+    - assets/background/startcadeli.jpg
     - assets/cadeli.logo.jpg
     - assets/index/index1.jpg
     - assets/index/index2.jpg

@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/cart_provider.dart';
@@ -37,6 +36,8 @@ class CartPage extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 14),
+
+            // Back to products
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: GestureDetector(
@@ -63,6 +64,7 @@ class CartPage extends StatelessWidget {
                 ),
               ),
             ),
+
             const SizedBox(height: 20),
             const Center(
               child: Text(
@@ -71,6 +73,8 @@ class CartPage extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 10),
+
+// Items list
             Expanded(
               child: cartItems.isEmpty
                   ? const Center(child: Text("Your cart is empty"))
@@ -128,46 +132,63 @@ class CartPage extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(width: 12),
+
+                          // middle text
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(product.name,
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 16,
-                                        color: Colors.black)),
+                                Text(
+                                  product.name,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                    color: Colors.black,
+                                  ),
+                                ),
                                 const SizedBox(height: 4),
-                                Text('${item['size']} - ${item['package']}',
-                                    style: const TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w500,
-                                        color: Colors.black87)),
-                                const SizedBox(height: 8),
-                                Text('€${totalPrice.toStringAsFixed(2)}',
-                                    style: const TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.black)),
+                                if ((item['size']?.toString().isNotEmpty ?? false) ||
+                                    (item['package']?.toString().isNotEmpty ?? false))
+                                  Text(
+                                    '${item['size'] ?? ''}'
+                                        '${(item['size'] ?? '').toString().isNotEmpty && (item['package'] ?? '').toString().isNotEmpty ? ' • ' : ''}'
+                                        '${item['package'] ?? ''}',
+                                    style: const TextStyle(fontSize: 12, color: Colors.black54, fontWeight: FontWeight.w500),
+                                  ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  '€${unitPrice.toStringAsFixed(2)} × $quantity = €${totalPrice.toStringAsFixed(2)}',
+                                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.black87),
+                                ),
                               ],
                             ),
                           ),
+
                           const SizedBox(width: 8),
+
+                          // qty & delete (index-based, like before)
                           Column(
                             children: [
                               Row(
                                 children: [
                                   IconButton(
                                     icon: const Icon(Icons.remove_circle_outline),
-                                    onPressed: () =>
-                                        cartProvider.updateQuantity(index, quantity - 1),
+                                    onPressed: () {
+                                      if (quantity > 1) {
+                                        cartProvider.updateQuantity(index, quantity - 1);
+                                      }
+                                      // ❌ do nothing if quantity == 1
+                                    },
                                     color: Colors.black54,
                                   ),
-                                  Text('$quantity',
-                                      style: const TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.black)),
+                                  Text(
+                                    '$quantity',
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.black,
+                                    ),
+                                  ),
                                   IconButton(
                                     icon: const Icon(Icons.add_circle_outline),
                                     onPressed: () =>
@@ -189,6 +210,9 @@ class CartPage extends StatelessWidget {
                 },
               ),
             ),
+
+
+            // Totals + proceed
             if (cartItems.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -197,16 +221,26 @@ class CartPage extends StatelessWidget {
                   children: [
                     const Divider(thickness: 1, color: Colors.black26),
                     const SizedBox(height: 6),
-                    Text(
-                      'Total: €${cartProvider.totalCost.toStringAsFixed(2)}',
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF1A2D3D),
-                      ),
-                      textAlign: TextAlign.right,
-                    ),
+
+                    // Totals (keep shipping synced with Woo order creation)
+                    Builder(builder: (context) {
+                      final subtotal = cartProvider.subtotal;
+                      const double shippingFlat = 2.50;
+                      final grand = subtotal + shippingFlat;
+
+                      return Column(
+                        children: [
+                          _totalsRow('Subtotal', subtotal),
+                          const SizedBox(height: 6),
+                          _totalsRow('Shipping', shippingFlat),
+                          const SizedBox(height: 10),
+                          _totalsRow('Total', grand, isBold: true, big: true),
+                        ],
+                      );
+                    }),
+
                     const SizedBox(height: 14),
+
                     GestureDetector(
                       onTap: () => Navigator.push(
                         context,
@@ -218,11 +252,7 @@ class CartPage extends StatelessWidget {
                           color: const Color(0xFF1A2D3D),
                           borderRadius: BorderRadius.circular(30),
                           boxShadow: const [
-                            BoxShadow(
-                              color: Colors.black38,
-                              offset: Offset(0, 8),
-                              blurRadius: 24,
-                            ),
+                            BoxShadow(color: Colors.black38, offset: Offset(0, 8), blurRadius: 24),
                           ],
                         ),
                         alignment: Alignment.center,
@@ -233,11 +263,7 @@ class CartPage extends StatelessWidget {
                             SizedBox(width: 10),
                             Text(
                               'Proceed to Checkout',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
+                              style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
                             ),
                           ],
                         ),
@@ -251,4 +277,28 @@ class CartPage extends StatelessWidget {
       ),
     );
   }
+}
+
+Widget _totalsRow(String label, double amount, {bool isBold = false, bool big = false}) {
+  return Row(
+    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    children: [
+      Text(
+        label,
+        style: TextStyle(
+          fontSize: big ? 18 : 14,
+          fontWeight: isBold ? FontWeight.w800 : FontWeight.w600,
+          color: const Color(0xFF1A2D3D),
+        ),
+      ),
+      Text(
+        '€${amount.toStringAsFixed(2)}',
+        style: TextStyle(
+          fontSize: big ? 18 : 14,
+          fontWeight: isBold ? FontWeight.w800 : FontWeight.w700,
+          color: const Color(0xFF1A2D3D),
+        ),
+      ),
+    ],
+  );
 }

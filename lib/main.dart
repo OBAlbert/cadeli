@@ -28,7 +28,9 @@ void main() async {
       );
     }
   } catch (e) {
-    print('Firebase already initialized: $e');
+    // Hot-reload duplicate init is fine — just log it and move on.
+    debugPrint('Firebase already initialized: $e');
+    // ❌ DO NOT touch FirebaseAuth.currentUser or getIdToken here.
   }
 
   await NotificationService.initialize();
@@ -50,9 +52,11 @@ class MyApp extends StatelessWidget {
           scaffoldBackgroundColor: Colors.white,
           primaryColor: Colors.blueAccent,
         ),
-        home: const StartRouter(),
+        //home: const StartRouter(),
 
-        //home: const StartToIndexRouter(),
+        home: const StartToIndexRouter(),
+
+        //home: const IndexPage(),
 
         routes: {
           '/map-picker': (context) => const PickLocationPage(),
@@ -63,19 +67,6 @@ class MyApp extends StatelessWidget {
       ),
     );
   }
-
-  // @override
-  // Widget build(BuildContext context) {
-  //   return MaterialApp(
-  //     title: 'Cadeli Test',
-  //     debugShowCheckedModeBanner: false,
-  //     theme: ThemeData(
-  //       primarySwatch: Colors.blue,
-  //       useMaterial3: true,
-  //     ),
-  //     home: const TestBrandScrollPage(), // 👈 Just swap this for now
-  //   );
-  // }
 
 }
 
@@ -103,26 +94,41 @@ class _StartToIndexRouterState extends State<StartToIndexRouter> {
   }
 }
 
+// REPLACE your old AuthGate class with this new one
 class AuthGate extends StatelessWidget {
   const AuthGate({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
+    return StreamBuilder<User?>(
+      // The key to solving the race condition
+      stream: FirebaseAuth.instance.authStateChanges(),
+      builder: (context, snapshot) {
+        // Show a loading screen while waiting for the initial auth check
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            body: Center(
+              child: CircularProgressIndicator(),
+            ),
+          );
+        }
 
-    if (user == null || user.email == null || user.uid.isEmpty) {
-      FirebaseAuth.instance.signOut(); // Auto log out if ghost
-      return const LoginPage();
-    }
+        // Now we have a definitive auth state
+        final User? user = snapshot.data;
 
-    if (!user.emailVerified) {
-      return const VerifyEmailPage();
-    }
+        if (user == null) {
+          return const LoginPage();
+        }
 
-    return const MainPage();
+        if (!user.emailVerified) {
+          return const VerifyEmailPage();
+        }
+
+        return const MainPage();
+      },
+    );
   }
 }
-
 class StartRouter extends StatefulWidget {
   const StartRouter({super.key});
 
@@ -136,7 +142,7 @@ class _StartRouterState extends State<StartRouter> {
     super.initState();
     Future.delayed(const Duration(seconds: 2), () {
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const AuthGate()),
+        MaterialPageRoute(builder: (_) => AuthGate()),
       );
     });
   }

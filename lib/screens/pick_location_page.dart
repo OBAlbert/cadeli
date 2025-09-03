@@ -4,6 +4,9 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:google_place/google_place.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // GeoPoint, FirebaseFirestore, FieldValue
+
 
 const _placesApiKey = 'AIzaSyADsxWf0_pAhv8BOQ1oXWefCuj-PJP7qCY'; // BROWSER KEY
 
@@ -20,10 +23,78 @@ class _PickLocationPageState extends State<PickLocationPage> {
   late GooglePlace _googlePlace;
 
   final LatLng _larnacaCenter = const LatLng(34.9167, 33.6333);
+  static const _larnacaRadiusMeters = 30000;
+
   LatLng _picked = const LatLng(34.9167, 33.6333);
   String _address = '';
   List<AutocompletePrediction> _predictions = [];
   bool _loading = false;
+
+  // --- NEW: keep last good reverse-geocode + last valid point inside Larnaca
+  Placemark? _lastPlacemark;
+  LatLng _lastValid = const LatLng(34.9167, 33.6333);
+
+  bool _isInsideLarnaca(LatLng p) {
+    final d = Geolocator.distanceBetween(
+      _larnacaCenter.latitude, _larnacaCenter.longitude, p.latitude, p.longitude,
+    );
+    return d <= _larnacaRadiusMeters;
+  }
+
+  void _rejectOutside() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('We currently deliver only within Larnaca.')),
+    );
+  }
+
+  Future<Map<String, dynamic>> _saveAddressToFirestore({
+    required String label,
+    required String line1,
+    required String city,
+    required String country,
+    required double lat,
+    required double lng,
+    bool setAsDefault = true,
+  }) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) throw Exception('Not signed in');
+
+    final col = FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .collection('addresses');
+
+    final doc = col.doc(); // create id up-front
+    final data = {
+      'id': doc.id,
+      'label': label,
+      'line1': line1,
+      'city': city,
+      'country': country,
+      'lat': lat,
+      'lng': lng,
+      'geo': GeoPoint(lat, lng),
+      'phone': '',
+      'isDefault': false, // we’ll set below
+      'timestamp': FieldValue.serverTimestamp(),
+    };
+
+    if (setAsDefault) {
+      final batch = FirebaseFirestore.instance.batch();
+      final all = await col.get();
+      for (final d in all.docs) {
+        batch.update(d.reference, {'isDefault': false});
+      }
+      batch.set(doc, {...data, 'isDefault': true});
+      await batch.commit();
+    } else {
+      await doc.set(data);
+    }
+
+    return {...data, 'isDefault': setAsDefault};
+  }
+
+
 
   @override
   void initState() {
@@ -42,26 +113,34 @@ class _PickLocationPageState extends State<PickLocationPage> {
     final result = await _googlePlace.autocomplete.get(
       input,
       components: [Component('country', 'cy')],
+      location: LatLon(_larnacaCenter.latitude, _larnacaCenter.longitude),
+      radius: _larnacaRadiusMeters, // bias to Larnaca
     );
-    if (result != null && result.predictions != null) {
-      setState(() => _predictions = result.predictions!);
+    if (result?.predictions != null) {
+      setState(() => _predictions = result!.predictions!);
     }
   }
 
   Future<void> _selectPrediction(AutocompletePrediction p) async {
     final details = await _googlePlace.details.get(p.placeId!);
     final loc = details?.result?.geometry?.location;
-    if (loc != null) {
-      final pos = LatLng(loc.lat!, loc.lng!);
-      final controller = await _mapController.future;
-      await controller.animateCamera(CameraUpdate.newLatLngZoom(pos, 16));
-      setState(() {
-        _picked = pos;
-        _address = details?.result?.formattedAddress ?? 'Selected location';
-        _predictions = [];
-        _searchController.text = details?.result?.name ?? '';
-      });
+    if (loc == null) return;
+
+    final pos = LatLng(loc.lat!, loc.lng!);
+    if (!_isInsideLarnaca(pos)) {
+      _rejectOutside();
+      return;
     }
+
+    final controller = await _mapController.future;
+    await controller.animateCamera(CameraUpdate.newLatLngZoom(pos, 16));
+    setState(() {
+      _picked = pos;
+      _lastValid = pos;
+      _address = details?.result?.formattedAddress ?? 'Selected location';
+      _predictions = [];
+      _searchController.text = details?.result?.name ?? '';
+    });
   }
 
   Future<void> _reverseGeocode(LatLng pos) async {
@@ -70,8 +149,10 @@ class _PickLocationPageState extends State<PickLocationPage> {
       final placemarks = await placemarkFromCoordinates(pos.latitude, pos.longitude);
       if (placemarks.isNotEmpty) {
         final pl = placemarks.first;
+        _lastPlacemark = pl; // NEW
         setState(() => _address = '${pl.street}, ${pl.locality}, ${pl.administrativeArea}');
       }
+
     } catch (_) {
       setState(() => _address = 'Unable to get address');
     } finally {
@@ -199,12 +280,25 @@ class _PickLocationPageState extends State<PickLocationPage> {
                               initialCameraPosition: CameraPosition(target: _picked, zoom: 14),
                               onMapCreated: (controller) => _mapController.complete(controller),
                               onCameraMove: (position) => _picked = position.target,
-                              onCameraIdle: () => _reverseGeocode(_picked),
+                              onCameraIdle: () async {
+                                if (!_isInsideLarnaca(_picked)) {
+                                  _rejectOutside();
+                                  final c = await _mapController.future;
+                                  await c.animateCamera(CameraUpdate.newLatLngZoom(_lastValid, 14));
+                                  return;
+                                }
+                                _lastValid = _picked;
+                                _reverseGeocode(_picked);
+                              },
                               myLocationButtonEnabled: false,
                               myLocationEnabled: false,
                               zoomGesturesEnabled: true,
                               zoomControlsEnabled: false,
                               onTap: (latLng) {
+                                if (!_isInsideLarnaca(latLng)) {
+                                  _rejectOutside();
+                                  return;
+                                }
                                 setState(() => _picked = latLng);
                                 _reverseGeocode(latLng);
                               },
@@ -239,7 +333,32 @@ class _PickLocationPageState extends State<PickLocationPage> {
                   child: SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      onPressed: () => Navigator.pop(context, _address),
+                      onPressed: () async {
+                        if (!_isInsideLarnaca(_picked)) {
+                          _rejectOutside();
+                          return;
+                        }
+                        final city = _lastPlacemark?.locality ?? 'Larnaca';
+                        final country = _lastPlacemark?.isoCountryCode ?? 'CY';
+
+                        try {
+                          final saved = await _saveAddressToFirestore(
+                            label: _address,
+                            line1: _address,
+                            city: city,
+                            country: country,
+                            lat: _picked.latitude,
+                            lng: _picked.longitude,
+                            setAsDefault: true, // new address becomes default
+                          );
+                          if (mounted) Navigator.pop<Map<String, dynamic>>(context, saved);
+                        } catch (e) {
+                          if (!mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Could not save address: $e')),
+                          );
+                        }
+                      },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF254573),
                         foregroundColor: Colors.white,

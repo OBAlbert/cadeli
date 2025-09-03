@@ -9,7 +9,7 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import '../models/cart_provider.dart';
 import '../screens/cart_page.dart';
-import '../screens/chat_page.dart';
+import '../screens/chat_list_page.dart';
 import '../screens/info_page.dart';
 import '../screens/search_overlay_page.dart';
 import '../screens/search_page.dart';
@@ -43,6 +43,17 @@ class AppScaffold extends StatelessWidget {
     final fullName = doc.data()?['fullName'] ?? '';
     return fullName.toString().split(' ').first.isNotEmpty ? fullName.toString().split(' ').first : 'there';
   }
+
+  Widget _tint(Color c) => IgnorePointer(
+    child: Container(
+      width: 120,
+      height: 120,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: c.withOpacity(0.12), // subtle coloured bloom
+      ),
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -139,7 +150,7 @@ class AppScaffold extends StatelessWidget {
                           ? "..."
                           : (snapshot.data ?? "there");
                       return Text(
-                        "Good afternoon $name",
+                        "Good day, $name",
                         style: const TextStyle(
                           color: Color(0xFF1A233D),
                           fontWeight: FontWeight.bold,
@@ -211,12 +222,6 @@ class AppScaffold extends StatelessWidget {
         ),
       ),
 
-      /// 🧱 Main content
-      // body: child,
-      //   body: Container(
-      //     color: Colors.greenAccent, // 👈 test background
-      //     child: child,
-      //   ),
 
       body: Stack(
         children: [
@@ -225,56 +230,87 @@ class AppScaffold extends StatelessWidget {
         ],
       ),
 
-
-
       /// 🍥 BottomNavigationBar with glowing frosted active tab
       bottomNavigationBar: hideNavigationBar
           ? null
-          : Container(
-        margin: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+          : Padding(
+        padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(15),
+          borderRadius: BorderRadius.circular(18),
           child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 0.01, sigmaY: 0.01), // invisible but enables real transparency
+            // 👇 this actually blurs the content behind the pill
+            filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
             child: Container(
               height: 66,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.10), // ✅ soft glassy fill
-                borderRadius: BorderRadius.circular(15),
+                // 👇 translucent fill so the blur is visible
+                color: Colors.white.withOpacity(0.20),
+                borderRadius: BorderRadius.circular(18),
                 border: Border.all(
-                  color: Colors.black.withOpacity(0.15),
-                  width: 1.3,
+                  // crisp “glass edge”
+                  color: Colors.white.withOpacity(0.35),
+                  width: 1.2,
                 ),
+                boxShadow: [
+                  // gentle lift from the page
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.12),
+                    blurRadius: 20,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
               ),
-              child: BottomNavigationBar(
-                currentIndex: currentIndex,
-                backgroundColor: Colors.transparent,
-                elevation: 0,
-                type: BottomNavigationBarType.fixed,
-                selectedItemColor: const Color(0xFF1A233D),
-                unselectedItemColor: const Color(0xFF1A233D).withOpacity(0.5),
-                selectedLabelStyle: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, height: 1.1),
-                unselectedLabelStyle: const TextStyle(fontSize: 8, fontWeight: FontWeight.w400, height: 1.1),
-                onTap: (index) {
-                  if (index == 2) {
-                    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ChatPage()));
-                  } else if (isAdmin && index == 4) {
-                    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AdminDashboard()));
-                  } else {
-                    onTabSelected(index);
-                  }
-                },
-                items: items,
+              child: Stack(
+                children: [
+                  // soft diagonal sheen across the glass
+                  Positioned.fill(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            Colors.white.withOpacity(0.25),
+                            Colors.white.withOpacity(0.08),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  // optional coloured edge tints like your screenshot
+                  Positioned(left: -16, top: -8, child: _tint(Colors.greenAccent)),
+                  Positioned(right: -16, bottom: -8, child: _tint(Colors.redAccent)),
+
+                  // the actual bottom nav
+                  BottomNavigationBar(
+                    currentIndex: currentIndex,
+                    backgroundColor: Colors.transparent,
+                    elevation: 0,
+                    type: BottomNavigationBarType.fixed,
+                    selectedItemColor: const Color(0xFF1A233F),
+                    unselectedItemColor: const Color(0xFF1A235A).withOpacity(0.6),
+                    selectedLabelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900, height: 1.1),
+                    unselectedLabelStyle: const TextStyle(fontSize: 8, fontWeight: FontWeight.w400, height: 1.1),
+                    onTap: (index) {
+                      if (index == 2) {
+                        Navigator.of(context).pushReplacement(
+                          MaterialPageRoute(builder: (_) => const ChatListPage()),
+                        );
+                      }
+                      else if (isAdmin && index == 4) {
+                        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AdminDashboard()));
+                      } else {
+                        onTabSelected(index);
+                      }
+                    },
+                    items: items,
+                  ),
+                ],
               ),
             ),
           ),
         ),
       ),
-
-
-
-
-
 
     );
   }

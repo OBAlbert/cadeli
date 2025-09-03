@@ -19,10 +19,14 @@ class SyncService {
     }
 
     // 2. Add WooCommerce products
+    final catMap = await WooCommerceService().fetchAllCategoriesMap();    // NEW
     for (final productJson in wooProducts) {
-      final product = Product.fromWooJson(productJson);
-      final docRef = productsCollection.doc(product.id); // Woo ID as doc ID
+      final product = Product.fromWooJson(
+        productJson as Map<String, dynamic>,
+        catMap,
+      );                                                                  // CHANGED
 
+      final docRef = productsCollection.doc(product.id);
       batch.set(docRef, {
         'id': product.id,
         'name': product.name,
@@ -35,6 +39,7 @@ class SyncService {
         'isFeatured': product.isFeatured,
       });
     }
+
 
     await batch.commit();
     print('✅ Synced WooCommerce products to Firestore.');

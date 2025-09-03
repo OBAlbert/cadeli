@@ -1,4 +1,6 @@
-import 'Category.dart';
+import 'category.dart';
+import '../services/woocommerce_service.dart' show WooCategoryMeta;
+
 
 class Product {
   final String id;
@@ -38,43 +40,96 @@ class Product {
     required this.brandImage,
   });
 
-  factory Product.fromWooJson(Map<String, dynamic> json) {
-    if ((json['brands'] as List?)?.isNotEmpty ?? false) {
-      print('✅ Brand image: ${json['brands'][0]['image']?['src']}');
-    }
-    // ✅ Calculate category data first
-    final categories = (json['categories'] as List<dynamic>)
-        .map((cat) => Category.fromJson(cat))
-        .toList();
+  factory Product.fromWooJson(
+      Map<String, dynamic> json,
+      Map<int, WooCategoryMeta> catMap, // <-- pass in from service
+      ) {
 
+    // Build category arrays using the authoritative category map
+    final prodCats = (json['categories'] as List<dynamic>? ?? []);
+    final List<int> catIds = [];
+    final List<int> catParents = [];
+    final List<String> catNames = [];
+    final List<String> catImages = [];
+
+    for (final c in prodCats) {
+      final id = (c['id'] ?? 0) as int;
+      catIds.add(id);
+
+      final meta = catMap[id];
+      catParents.add(meta?.parent ?? 0);
+      catNames.add(meta?.name ?? (c['name']?.toString() ?? ''));
+      final img = meta?.image ?? '';
+      catImages.add(_fixUrl(img));
+    }
+
+// ---- brand safe parsing ----
+    final hasBrand = (json['brands'] as List?)?.isNotEmpty ?? false;
+    final String brandName   = hasBrand ? (json['brands'][0]['name'] ?? '') : (json['brand'] ?? '');
+    final String brandIdStr  = hasBrand ? (json['brands'][0]['id']?.toString() ?? '0') : '0';
+    final String brandImgUrl = hasBrand ? _fixUrl(json['brands'][0]['image']?['src'] ?? '') : '';
+
+// ---- price parsing (robust) ----
+    final String rawPriceStr = '${json['price'] ?? json['regular_price'] ?? 0}';
+    final double priceFromWoo = double.tryParse(rawPriceStr) ?? 0.0;
+
+    final String rawRegularStr = '${json['regular_price'] ?? rawPriceStr}';
+    final double regularFromWoo = double.tryParse(rawRegularStr) ?? priceFromWoo;
+
+    final bool onSaleFlag = json['on_sale'] == true;
+
+// sale_price can be '', null, or string. If missing but on_sale is true, infer from price vs regular.
+    final String? rawSaleStr = (json['sale_price']?.toString().isNotEmpty ?? false)
+        ? json['sale_price'].toString()
+        : null;
+    double? saleFromWoo = rawSaleStr != null ? double.tryParse(rawSaleStr) : null;
+
+// If Woo says on_sale, but sale_price is empty,
+// AND the current price is lower than regular, treat price as the sale and regular as original.
+    double effectiveRegular = regularFromWoo;
+    double effectiveSale = saleFromWoo ?? 0.0;
+    double effectivePrice = priceFromWoo;
+
+    if (onSaleFlag) {
+      final bool saleMissing = (saleFromWoo == null || saleFromWoo == 0.0);
+      final bool priceLooksDiscounted = (priceFromWoo > 0 && priceFromWoo < regularFromWoo);
+
+      if (saleMissing && priceLooksDiscounted) {
+        effectiveSale = priceFromWoo;
+        effectivePrice = regularFromWoo;
+      } else if (saleFromWoo != null && saleFromWoo > 0 && saleFromWoo < regularFromWoo) {
+        // Normal case: both regular & sale provided
+        effectiveSale = saleFromWoo;
+        effectivePrice = regularFromWoo;
+      }
+    } else {
+      // not on sale -> keep as-is (price = regular)
+      effectivePrice = regularFromWoo != 0 ? regularFromWoo : priceFromWoo;
+      effectiveSale = 0.0;
+    }
+
+// ---- image (first image or empty) ----
+    final images = (json['images'] is List) ? (json['images'] as List) : const [];
+    final String firstImage = images.isNotEmpty ? _fixUrl(images[0]['src'] ?? '') : '';
 
     return Product(
       id: json['id'].toString(),
-      name: json['name'],
-      brand: (json['brands'] as List?)?.isNotEmpty ?? false
-          ? json['brands'][0]['name']
-          : '',
-      brandId: (json['brands'] as List?)?.isNotEmpty ?? false
-          ? json['brands'][0]['id'].toString()
-          : '0',
-      brandImage: (json['brands'] as List?)?.isNotEmpty ?? false
-          ? Product._fixUrl(json['brands'][0]['image']?['src'] ?? '')
-          : '',
+      name: json['name'] ?? '',
+      brand: brandName,
+      brandId: brandIdStr,
+      brandImage: brandImgUrl,
 
-      price: double.tryParse(json['regular_price'].toString()) ?? 0.0,
-      salePrice: json['sale_price']?.toString().isNotEmpty ?? false
-          ? double.tryParse(json['sale_price'].toString())
-          : null,
-      imageUrl: json['images'].isNotEmpty
-          ? _fixUrl(json['images'][0]['src'])
-          : 'assets/products/default.jpg',
-
-      categoryIds: categories.map((cat) => cat.id).toList(),
-      categoryParents: categories.map((cat) => cat.parent ?? 0).toList(),
-      categoryNames: categories.map((cat) => cat.name).toList(),
-      categoryImages: categories.map((cat) => cat.imageUrl ?? 'assets/icons/default_icon.png').toList(),
+      price: effectivePrice,
+      salePrice: (effectiveSale > 0 && effectiveSale < effectivePrice) ? effectiveSale : null,
 
 
+      imageUrl: firstImage,
+
+      // this is what we’ll filter on
+      categoryIds: catIds,
+      categoryParents: catParents,
+      categoryNames: catNames,
+      categoryImages: catImages,
 
       isFeatured: json['featured'] ?? false,
     );
@@ -130,5 +185,6 @@ class Product {
     return (index != -1 && index < categoryImages.length) ? categoryImages[index] : null;
   }
 
+  bool hasCategory(int id) => categoryIds.contains(id);
 
 }

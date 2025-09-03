@@ -14,12 +14,30 @@ class Category {
   });
 
   factory Category.fromJson(Map<String, dynamic> json) {
+    // parent can be int or string → normalize to int?
+    int? parent;
+    final rawParent = json['parent'];
+    if (rawParent is num) {
+      parent = rawParent.toInt();
+    } else if (rawParent is String && rawParent.isNotEmpty) {
+      parent = int.tryParse(rawParent);
+    }
+
+    // image can be object or string → normalize to String?
+    String? imageUrl;
+    final img = json['image'];
+    if (img is Map) {
+      imageUrl = img['src']?.toString();
+    } else if (img is String) {
+      imageUrl = img;
+    }
+
     return Category(
-      id: json['id'],
-      name: json['name'],
-      slug: json['slug'],
-      parent: json['parent'] is int ? json['parent'] : null,
-      imageUrl: json['image'] != null ? json['image']['src'] : null,
+      id: (json['id'] as num).toInt(),
+      name: (json['name'] ?? '').toString(),
+      slug: (json['slug'] ?? '').toString(),
+      parent: parent,
+      imageUrl: imageUrl,
     );
   }
 

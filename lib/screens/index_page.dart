@@ -85,44 +85,6 @@ class _IndexPageState extends State<IndexPage> {
                 onPageChanged: (index) {
                   setState(() => _currentPage = index);
                 },
-                // itemBuilder: (context, index) {
-                //   return Padding(
-                //     padding: const EdgeInsets.symmetric(horizontal: 5),
-                //     child: Column(
-                //       children: [
-                //         SizedBox(
-                //           height: 400,
-                //           child: ClipRRect(
-                //             borderRadius: BorderRadius.circular(20),
-                //             child: Image.asset(
-                //               slides[index]['image']!,
-                //               fit: BoxFit.cover,
-                //               width: double.infinity,
-                //             ),
-                //           ),
-                //         ),
-                //         const SizedBox(height: 30),
-                //         Text(
-                //           slides[index]['title']!,
-                //           style: const TextStyle(
-                //             fontSize: 40,
-                //             fontWeight: FontWeight.bold,
-                //             color: Colors.black87,
-                //           ),
-                //         ),
-                //         const SizedBox(height: 8),
-                //         Text(
-                //           slides[index]['subtitle']!,
-                //           textAlign: TextAlign.center,
-                //           style: const TextStyle(
-                //             fontSize: 20,
-                //             color: Colors.black54,
-                //           ),
-                //         ),
-                //       ],
-                //     ),
-                //   );
-                // },item buider old
                   itemBuilder: (context, index) {
                     double opacity = index == _currentPage ? 1.0 : 0.4;
 

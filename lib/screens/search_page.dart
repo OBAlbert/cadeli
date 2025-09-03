@@ -7,6 +7,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cadeli/widget/mini_product_card.dart';
 
+
 import '../models/Category.dart';
 
 
@@ -43,7 +44,8 @@ class _SearchPageState extends State<SearchPage> {
   Future<void> fetchProducts() async {
     try {
       final raw = await wooService.fetchProducts();
-      final parsed = raw.map((json) => Product.fromWooJson(json)).toList();
+      final catMap = await wooService.fetchAllCategoriesMap();
+      final parsed = raw.map((j) => Product.fromWooJson(j, catMap)).toList();
       setState(() {
         allProducts = parsed;
         filteredProducts = parsed;

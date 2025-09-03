@@ -1,8 +1,6 @@
+// lib/pages/home_page.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import '../widget/mini_product_card.dart';
 import 'product_detail_page.dart';
 import '../widget/product_card.dart';
 import '../models/product.dart';
@@ -17,19 +15,23 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  // ---- UI state ----
   final PageController _pageController = PageController();
   late Timer _timer;
   int _currentIndex = 0;
 
+  // ---- Data state ----
   final WooCommerceService wooService = WooCommerceService();
   List<Product> allProducts = [];
   List<Product> filteredProducts = [];
-  List<Category> beverageCategories = [];
+  List<Category> beverageCategories = []; // pills = children of parent 96
   bool isLoading = true;
+  int? selectedCategoryId; // null = All
 
-  String selectedCategory = 'All';
-  int beverageParentId = 96;
+  // Parent category for "Beverage Type"
+  static const int beverageParentId = 96;
 
+  // ---- Slides ----
   final List<Map<String, String>> slides = [
     {
       "image": "assets/background/bottle_back.jpg",
@@ -67,8 +69,8 @@ class _HomePageState extends State<HomePage> {
   void initState() {
     super.initState();
     _startSlideTimer();
-    fetchProducts();
-    fetchBeverageCategories();
+    _fetchProducts();
+    _fetchPillCategories(); // only children under parent 96
   }
 
   void _startSlideTimer() {
@@ -85,6 +87,7 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+
   @override
   void dispose() {
     _timer.cancel();
@@ -92,48 +95,57 @@ class _HomePageState extends State<HomePage> {
     super.dispose();
   }
 
-  Future<void> fetchProducts() async {
+  // ---- Data loads ----
+
+  Future<void> _fetchProducts() async {
     try {
       final raw = await wooService.fetchProducts();
-      final parsed = raw.map((json) => Product.fromWooJson(json)).toList();
+      final catMap = await wooService.fetchAllCategoriesMap();
+      final parsed = raw
+          .map<Product>((j) => Product.fromWooJson(j as Map<String, dynamic>, catMap))
+          .toList();
+
+      if (!mounted) return;
       setState(() {
         allProducts = parsed;
         filteredProducts = parsed;
         isLoading = false;
       });
-    } catch (e) {
-      print('❌ Failed to fetch products: $e');
+    } catch (_) {
+      if (!mounted) return;
       setState(() => isLoading = false);
     }
   }
 
-  Future<void> fetchBeverageCategories() async {
+  Future<void> _fetchPillCategories() async {
     try {
-      final fetched = await wooService.fetchBeverageTypeCategories();
-      setState(() {
-        beverageCategories = fetched;
-      });
-    } catch (e) {
-      print("❌ Error fetching beverage categories: $e");
+      final children = await wooService.fetchCategories(
+        perPage: 100,
+        parent: beverageParentId, // only categories under 96
+        hideEmpty: false,
+      );
+
+      children.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+
+      if (!mounted) return;
+      setState(() => beverageCategories = children);
+    } catch (_) {
+      // swallow for production; UI remains usable
     }
   }
 
-  void filterByCategory(String name) {
+  // ---- Filtering ----
+
+  void _filterByCategoryId(int? id) {
     setState(() {
-      selectedCategory = name;
-      if (name == 'All') {
-        filteredProducts = allProducts;
-      } else {
-        final matchedCategory = beverageCategories.firstWhere(
-              (cat) => cat.name == name,
-          orElse: () => Category(id: -1, name: '', slug: '', parent: -1),
-        );
-        filteredProducts = allProducts
-            .where((p) => p.categoryIds.contains(matchedCategory.id))
-            .toList();
-      }
+      selectedCategoryId = id;
+      filteredProducts = (id == null)
+          ? allProducts
+          : allProducts.where((p) => p.categoryIds.contains(id)).toList();
     });
   }
+
+  // ---- UI ----
 
   @override
   Widget build(BuildContext context) {
@@ -155,9 +167,9 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ),
               ),
-              buildCategoryScroll(),
+              _buildCategoryScroll(),
               const SizedBox(height: 20),
-              buildProductGrid(),
+              _buildProductGrid(),
             ],
           ),
         ),
@@ -178,9 +190,7 @@ class _HomePageState extends State<HomePage> {
               child: PageView.builder(
                 controller: _pageController,
                 itemCount: slides.length,
-                onPageChanged: (index) {
-                  setState(() => _currentIndex = index);
-                },
+                onPageChanged: (index) => setState(() => _currentIndex = index),
                 itemBuilder: (context, index) {
                   final slide = slides[index];
                   return Stack(
@@ -244,37 +254,49 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget buildCategoryScroll() {
-    final List<String> categories = ['All', ...beverageCategories.map((c) => c.name)];
-
+  Widget _buildCategoryScroll() {
     return Padding(
       padding: const EdgeInsets.only(left: 16.0, top: 10),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(
-          children: categories.map((cat) {
-            final bool isSelected = selectedCategory == cat;
-
-            return Padding(
+          children: [
+            Padding(
               padding: const EdgeInsets.only(right: 8),
               child: ChoiceChip(
-                label: Text(cat),
-                selected: isSelected,
-                onSelected: (_) => filterByCategory(cat),
+                label: const Text('All'),
+                selected: selectedCategoryId == null,
+                onSelected: (_) => _filterByCategoryId(null),
                 selectedColor: Colors.blue.shade100,
                 backgroundColor: Colors.grey.shade200,
                 labelStyle: TextStyle(
-                  color: isSelected ? Colors.blue : Colors.black,
+                  color: selectedCategoryId == null ? Colors.blue : Colors.black,
                 ),
               ),
-            );
-          }).toList(),
+            ),
+            ...beverageCategories.map((c) {
+              final isSelected = selectedCategoryId == c.id;
+              return Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: ChoiceChip(
+                  label: Text(c.name),
+                  selected: isSelected,
+                  onSelected: (_) => _filterByCategoryId(isSelected ? null : c.id),
+                  selectedColor: Colors.blue.shade100,
+                  backgroundColor: Colors.grey.shade200,
+                  labelStyle: TextStyle(
+                    color: isSelected ? Colors.blue : Colors.black,
+                  ),
+                ),
+              );
+            }),
+          ],
         ),
       ),
     );
   }
 
-  Widget buildProductGrid() {
+  Widget _buildProductGrid() {
     if (isLoading) {
       return const Padding(
         padding: EdgeInsets.all(32),
@@ -305,9 +327,7 @@ class _HomePageState extends State<HomePage> {
         return GestureDetector(
           onTap: () => Navigator.push(
             context,
-            MaterialPageRoute(
-              builder: (_) => ProductDetailPage(product: product),
-            ),
+            MaterialPageRoute(builder: (_) => ProductDetailPage(product: product)),
           ),
           child: ProductCard(product: product),
         );

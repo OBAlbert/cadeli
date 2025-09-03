@@ -3,7 +3,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
+import 'package:cloud_functions/cloud_functions.dart'; // call Firebase Cloud Functions
 
+/// Admin view for orders awaiting approval.
+/// Accept -> capture payment (server), set status=active.
+/// Reject -> void payment (server), set status=rejected.
 class PendingOrdersPage extends StatefulWidget {
   const PendingOrdersPage({super.key});
 
@@ -13,128 +17,337 @@ class PendingOrdersPage extends StatefulWidget {
 
 class _PendingOrdersPageState extends State<PendingOrdersPage> {
   late GoogleMapController _mapController;
-  final LatLng _shopLocation = const LatLng(34.9192, 33.6225);
+  final LatLng _shopLocation = const LatLng(34.918713218314764, 33.60916689025297);
+
   List<Map<String, dynamic>> _orders = [];
   String _sortBy = 'distance';
+  bool _busy = false; // lock UI while capture/void runs
+
+  final Map<String, String> _userNameCache = {};
+
+  Future<String> _getFullNameFor(String? uid) async {
+    if (uid == null || uid.isEmpty) return '';
+    if (_userNameCache.containsKey(uid)) return _userNameCache[uid]!;
+    try {
+      final snap = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      final fullName = (snap.data()?['fullName'] ?? '').toString().trim();
+      _userNameCache[uid] = fullName;
+      return fullName;
+    } catch (_) {
+      _userNameCache[uid] = '';
+      return '';
+    }
+  }
+
+  String _formatDistance(double km) {
+    if (km >= 9000) return '—'; // sentinel for "missing coords"
+    if (km <= 0) return '—';
+    if (km < 1) return '${(km * 1000).round()} m';
+    return '${km.toStringAsFixed(km < 10 ? 1 : 0)} km';
+  }
+
+
 
   @override
   void initState() {
     super.initState();
+
     FirebaseFirestore.instance
         .collection('orders')
-        .where('status', isEqualTo: 'pending')
+        .where('status', isEqualTo: 'pending')   // <-- our target
+        .orderBy('createdAt', descending: true)        // consistent ordering
+        .limit(25)
         .snapshots()
-        .listen((snapshot) {
-      final orders = snapshot.docs
-          .map((doc) {
-        final data = doc.data();
-        final GeoPoint? loc = data['location'];
-        final dist = loc != null
-            ? Geolocator.distanceBetween(
-          _shopLocation.latitude,
-          _shopLocation.longitude,
-          loc.latitude,
-          loc.longitude,
-        ) / 1000
-            : 0.0;
-        return {
-          ...data,
-          'distance': dist,
-          'id': doc.id,
-        };
-      })
-          .where((order) =>
-      (order['name'] ?? '').toString().trim().isNotEmpty &&
-          (order['address'] ?? '').toString().trim().isNotEmpty)
-          .toList();
+        .listen((snapshot) async {
+      debugPrint('🔥 Pending docs: ${snapshot.docs.length}');
+      if (snapshot.docs.isNotEmpty) {
+        final d0 = snapshot.docs.first.data();
+        debugPrint('🔥 First doc keys: ${d0.keys.toList()}');
+        debugPrint('🔥 First doc status: ${d0['status']}  createdAt: ${d0['createdAt']}');
+      }
 
-      setState(() {
-        _orders = _sortOrders(orders);
-      });
+      final built = <Map<String, dynamic>>[];
+
+      for (final doc in snapshot.docs) {
+        final data = doc.data();
+        final addr = (data['address'] as Map<String, dynamic>?) ?? {};
+
+        // ✅ true customer name from users/{uid}.fullName
+        final userId = (data['userId'] ?? '').toString();
+        final fullName = await _getFullNameFor(userId);
+
+        // Display address (your fields)
+        final line1 = (addr['address_1'] ?? '').toString().trim();
+        final city  = (addr['city'] ?? '').toString().trim();
+        // your sample sometimes had address text in last_name
+        final lastMaybeAddress = (addr['last_name'] ?? '').toString().trim();
+        String addressLine = ([line1, city]..removeWhere((s) => s.isEmpty)).join(', ');
+        if (addressLine.isEmpty && lastMaybeAddress.isNotEmpty) addressLine = lastMaybeAddress;
+        if (addressLine.isEmpty) addressLine = 'Larnaca, Cyprus';
+
+        final phone = (addr['phone'] ?? '').toString().trim();
+
+        // coords (no geocoding; if missing -> large distance so sorts last)
+        final lat = (addr['lat'] as num?)?.toDouble();
+        final lng = (addr['lng'] as num?)?.toDouble();
+        final hasLL = lat != null && lng != null;
+        final distanceKm = hasLL
+            ? Geolocator.distanceBetween(_shopLocation.latitude, _shopLocation.longitude, lat!, lng!) / 1000.0
+            : 9999.0;
+
+        // meta
+        final meta = (data['meta'] as Map<String, dynamic>?) ?? {};
+        final deliveryType = (meta['delivery_type'] ?? 'normal').toString();
+        final timeSlot     = (meta['time_slot'] ?? '').toString();
+
+        final preferredDay = (meta['preferred_day'] ?? '').toString();
+        final frequency    = (meta['frequency'] ?? '').toString();
+
+        // totals (your total is a string sometimes)
+        num _num(dynamic v) => v is num ? v : (num.tryParse(v?.toString() ?? '') ?? 0);
+        final total = _num(data['total']);
+        final createdAt = (data['createdAt'] ?? data['timestamp']);
+        final paymentStatus = (data['paymentStatus'] ?? 'unpaid').toString();
+        final wooLineItems =
+            (data['wooLineItems'] as List?) ??
+                (data['items'] as List?) ??
+                const [];
+        final currency = (data['currency'] ?? '').toString();
+        final paymentMethod = (data['paymentMethod'] ?? 'card').toString(); // 'card' | 'cod'
+
+
+        built.add({
+          'id'            : doc.id,
+          'userId'        : userId,
+          'wooOrderId'    : (data['wooOrderId'] ?? 0) as int,
+          'customerName'  : fullName.isNotEmpty ? fullName : userId, // ✅ use real name
+          'address'       : addressLine,
+          'phone'         : phone,
+          'timeSlot'      : timeSlot.isEmpty ? 'No time selected' : timeSlot,
+          'subscription'  : deliveryType == 'subscription',          // bool for internal use
+          'distance'      : distanceKm,
+          'timestamp'     : createdAt,
+          'lat'           : lat,
+          'lng'           : lng,
+          'total'         : total,
+          'paymentStatus' : paymentStatus,
+          'items'        : wooLineItems,
+          'currency'     : currency,
+          'paymentMethod': paymentMethod,
+          'preferredDay' : preferredDay,
+          'frequency'    : frequency,
+        });
+      }
+
+      if (mounted) setState(() => _orders = _sortOrders(built));
+    },
+        onError: (e) {
+      debugPrint('🔥 orders stream error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Can’t load pending orders: $e')),
+        );
+      }
     });
   }
 
   List<Map<String, dynamic>> _sortOrders(List<Map<String, dynamic>> orders) {
     if (_sortBy == 'distance') {
-      orders.sort((a, b) =>
-          (a['distance'] as double).compareTo(b['distance'] as double));
+      orders.sort((a, b) => (a['distance'] as double).compareTo(b['distance'] as double));
     } else {
-      orders.sort((a, b) => (b['timestamp'] as Timestamp)
-          .compareTo(a['timestamp'] as Timestamp));
+      orders.sort((a, b) {
+        final ta = a['timestamp'];
+        final tb = b['timestamp'];
+        if (ta is Timestamp && tb is Timestamp) return tb.compareTo(ta);
+        return 0;
+      });
     }
     return orders;
   }
 
-  void _updateOrderStatus(String id, String newStatus) {
-    FirebaseFirestore.instance
-        .collection('orders')
-        .doc(id)
-        .update({'status': newStatus});
+  // --- Admin actions ---
+
+  Future<void> _acceptOrder(Map<String, dynamic> order) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+
+    final int wooOrderId = order['wooOrderId'] ?? 0;
+    final String docId = order['id'];
+
+    try {
+      // 1) Accept + (maybe) capture
+      final isCOD = (order['paymentMethod'] as String?) == 'cod';
+      if (isCOD) {
+        // COD: just accept; payment stays unpaid
+        await FirebaseFunctions.instance
+            .httpsCallable('adminAcceptOrder')
+            .call({'orderId': wooOrderId, 'docId': docId});
+      } else {
+        // Card: capture the auth now
+        await FirebaseFunctions.instance
+            .httpsCallable('captureWooPayment')
+            .call({'orderId': wooOrderId, 'docId': docId});
+      }
+
+      // 2) (Optional) Optimistic UI: mark active – webhook will set paymentStatus
+      await FirebaseFirestore.instance.collection('orders').doc(docId).update({
+        'status': 'active',
+        'updatedAt': FieldValue.serverTimestamp(),
+        'timeline': FieldValue.arrayUnion([
+          {
+            'at'  : DateTime.now().toUtc().toIso8601String(),
+            'type': 'admin_accepted',
+            'note': 'Order accepted by admin (Stripe capture will reflect via webhook if card).'
+          }
+        ]),
+      });
+
+      // 3) Notify user
+      final userId = order['userId'] as String? ?? '';
+      if (userId.isNotEmpty) {
+        await FirebaseFirestore.instance
+            .collection('chats').doc(userId)
+            .collection('messages').add({
+          'sender': 'system',
+          'text': '✅ Your order has been accepted! We\'re preparing it now.',
+          'timestamp': FieldValue.serverTimestamp(),
+        });
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Accepted. If card, capture will finalize via webhook.'), backgroundColor: Colors.green),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to accept: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+ finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
-  void _rejectOrder(String id) {
-    FirebaseFirestore.instance.collection('orders').doc(id).delete();
+  Future<void> _rejectOrder(Map<String, dynamic> order) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+
+    final int wooOrderId = order['wooOrderId'] ?? 0;
+    final String docId = order['id'];
+
+    try {
+      // 1) Void/cancel auth on server via Cloud Function
+      final callable = FirebaseFunctions.instance.httpsCallable('voidWooPayment');
+      await callable.call({'orderId': wooOrderId, 'docId': docId}); // will throw on error
+
+      // 2) Update Firestore state + timeline
+      await FirebaseFirestore.instance.collection('orders').doc(docId).update({
+        'status': 'rejected',
+        'payment.auth': 'voided',
+        'timeline': FieldValue.arrayUnion([
+          {
+            'at'  : DateTime.now().toUtc().toIso8601String(),
+            'type': 'admin_rejected',
+            'note': 'Payment authorization voided, order rejected'
+          }
+        ]),
+      });
+
+      // Push a chat message to the user
+      final userId = order['userId'] as String? ?? '';
+      if (userId.isNotEmpty) {
+        await FirebaseFirestore.instance
+            .collection('chats').doc(userId)
+            .collection('messages').add({
+          'sender': 'system',
+          'text': '❌ Your order was rejected. The payment authorization has been voided.',
+          'timestamp': FieldValue.serverTimestamp(),
+        });
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Rejected: authorization voided'), backgroundColor: Colors.red),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to reject: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
+
+  Widget _chip(String text) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+    decoration: BoxDecoration(
+      color: Colors.grey.shade100,
+      borderRadius: BorderRadius.circular(20),
+      border: Border.all(color: Colors.grey.shade300),
+    ),
+    child: Text(text, style: const TextStyle(fontSize: 12, color: Colors.black87)),
+  );
+
+  Widget _circleBtn({required IconData icon, required Color color, required VoidCallback onTap}) {
+    return Container(
+      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+      child: IconButton(icon: Icon(icon, color: Colors.white), onPressed: onTap),
+    );
+  }
+
 
   @override
   Widget build(BuildContext context) {
+    final markers = _orders
+        .where((o) => o['lat'] != null && o['lng'] != null)
+        .map((o) => Marker(
+      markerId: MarkerId(o['id']),
+      position: LatLng(o['lat'] as double, o['lng'] as double),
+      icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueYellow),
+      onTap: () => _showOrderDialog(o),
+    ))
+        .toSet();
+
     return Scaffold(
       body: Column(
         children: [
-
-          // MAP
+          // Map
           Container(
             height: MediaQuery.of(context).size.height * 0.45,
             margin: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(20),
-              boxShadow: const [
-                BoxShadow(color: Colors.black12, blurRadius: 6)
-              ],
+              boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 6)],
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(20),
               child: GoogleMap(
-                onMapCreated: (controller) => _mapController = controller,
-                initialCameraPosition:
-                CameraPosition(target: _shopLocation, zoom: 13),
+                onMapCreated: (c) => _mapController = c,
+                initialCameraPosition: CameraPosition(target: _shopLocation, zoom: 13),
                 zoomControlsEnabled: true,
                 minMaxZoomPreference: const MinMaxZoomPreference(5, 18),
-                markers: _orders
-                    .where((order) => order['location'] != null)
-                    .map((order) {
-                  final GeoPoint loc = order['location'];
-                  return Marker(
-                    markerId: MarkerId(order['id']),
-                    position: LatLng(loc.latitude, loc.longitude),
-                    icon: BitmapDescriptor.defaultMarkerWithHue(
-                        BitmapDescriptor.hueYellow),
-                    onTap: () => _showOrderDialog(order),
-                  );
-                }).toSet(),
+                markers: markers,
               ),
             ),
           ),
 
-          // SORT HEADER
+          // Sort header
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
-                  "Pending Orders",
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.black),
-                ),
+                const Text("Pending Orders",
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.black)),
                 DropdownButton<String>(
                   value: _sortBy,
                   items: const [
-                    DropdownMenuItem(
-                        value: 'distance',
-                        child: Text(
-                          "By Distance",
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.black),
-                        )),
+                    DropdownMenuItem(value: 'distance', child: Text("By Distance")),
                     DropdownMenuItem(value: 'time', child: Text("By Time")),
                   ],
                   onChanged: (val) {
@@ -145,170 +358,116 @@ class _PendingOrdersPageState extends State<PendingOrdersPage> {
                       });
                     }
                   },
-                )
+                ),
               ],
             ),
           ),
 
-          // ORDER LIST
+          // List
           Expanded(
-            child: ListView.builder(
-              padding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              itemCount: _orders.length,
-              itemBuilder: (context, index) {
-                final order = _orders[index];
-
-                return GestureDetector(
-                  onTap: () => _showOrderDialog(order), // 📌 Tap opens full detail
-                  child:
-                   Container(
-                    margin: const EdgeInsets.only(bottom: 16), // Spacing between cards
-                    padding: const EdgeInsets.all(16), // Inner card padding
-                    decoration: BoxDecoration(
-                      color: Colors.white, // White background as per wireframe
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.grey.shade300), // Soft border
-                      boxShadow: const [
-                        BoxShadow(
-                          color: Colors.black12,
-                          blurRadius: 4,
-                          offset: Offset(0, 2),
+            child: AbsorbPointer(
+              absorbing: _busy, // lock while server call in-flight
+              child: ListView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                itemCount: _orders.length,
+                itemBuilder: (_, i) {
+                  final order = _orders[i];
+                  return GestureDetector(
+                    onTap: () => _showOrderDialog(order),
+                    child: Opacity(
+                      opacity: _busy ? 0.7 : 1,
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 16),
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: Colors.grey.shade300),
+                          boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2))],
                         ),
-                      ],
-                    ),
-                      child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // 🔹 Top row: User name (bold) and distance
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              order['name'] ?? '',
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.black87,
-                              ),
-                            ),
-                            Text(
-                              "${(order['distance'] as double).toStringAsFixed(0)}km",
-                              style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.black54,
-                              ),
-                            ),
-                          ],
-                        ),
-
-                        const SizedBox(height: 6),
-
-                        // 🔹 Address row with pin icon
-                        Row(
-                          children: [
-                            const Icon(Icons.location_pin, color: Colors.red, size: 18),
-                            const SizedBox(width: 6),
+                            // LEFT: details
                             Expanded(
-                              child: Text(
-                                order['address'] ?? 'No address',
-                                style: const TextStyle(fontSize: 14, color: Colors.black87),
-                                overflow: TextOverflow.ellipsis,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // name + distance
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          order['customerName'] ?? '',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.black),
+                                        ),
+                                      ),
+                                      Text(
+                                        _formatDistance(order['distance'] as double),
+                                        style: const TextStyle(fontSize: 14, color: Colors.black54, fontWeight: FontWeight.bold),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 6),
+
+                                  // address
+                                  Row(children: [
+                                    const Icon(Icons.location_pin, color: Colors.red, size: 18),
+                                    const SizedBox(width: 6),
+                                    Expanded(
+                                      child: Text(
+                                        order['address'] ?? 'No address',
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(fontSize: 14, color: Colors.black87),
+                                      ),
+                                    ),
+                                  ]),
+                                  const SizedBox(height: 8),
+
+                                  // chips row: payment, status, total, subscription + time slot
+                                  Wrap(
+                                    spacing: 8,
+                                    runSpacing: 6,
+                                    children: [
+                                      _chip((order['paymentMethod'] == 'cod') ? 'COD' : 'Card'),
+                                      _chip('Status: ${order['paymentStatus'] ?? 'unpaid'}'),
+                                      if ((order['total'] as num) > 0)
+                                        _chip('Total: ${order['total']} ${order['currency'] ?? ''}'),
+                                      _chip((order['subscription'] as bool) ? 'Subscription' : 'One-off'),
+                                      if ((order['subscription'] as bool) && (order['timeSlot'] as String).isNotEmpty)
+                                        _chip('Slot: ${order['timeSlot']}'),
+                                      if ((order['subscription'] as bool) && (order['preferredDay'] as String).isNotEmpty)
+                                        _chip('Day: ${order['preferredDay']}'),
+                                      if ((order['subscription'] as bool) && (order['frequency'] as String).isNotEmpty)
+                                        _chip('Every: ${order['frequency']}'),
+                                    ],
+                                  ),
+                                ],
                               ),
+                            ),
+
+                            const SizedBox(width: 12),
+
+                            // RIGHT: vertical actions
+                            Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                _circleBtn(icon: Icons.check, color: Colors.green, onTap: () => _acceptOrder(order)),
+                                const SizedBox(height: 8),
+                                _circleBtn(icon: Icons.chat_bubble_outline, color: Colors.blueGrey, onTap: () => _showOrderDialog(order)),
+                                const SizedBox(height: 8),
+                                _circleBtn(icon: Icons.close, color: Colors.red, onTap: () => _rejectOrder(order)),
+                              ],
                             ),
                           ],
                         ),
-
-                        const SizedBox(height: 4),
-
-                        // 🔹 Time slot row
-                        Row(
-                          children: [
-                            const Icon(Icons.access_time, size: 16, color: Colors.grey),
-                            const SizedBox(width: 6),
-                            Text(
-                              order['timeSlot'] ?? 'No time',
-                              style: const TextStyle(fontSize: 14, color: Colors.black87),
-                            ),
-                          ],
-                        ),
-
-                        const SizedBox(height: 4),
-
-                        // 🔹 Subscription type row
-                        Row(
-                          children: [
-                            const Icon(Icons.notifications_none, size: 16, color: Colors.grey),
-                            const SizedBox(width: 6),
-                            Text(
-                              order['subscription'] ?? 'no-subscription',
-                              style: const TextStyle(fontSize: 13, color: Colors.black54),
-                            ),
-                          ],
-                        ),
-
-                        const SizedBox(height: 12),
-
-                        // 🔹 Action buttons row
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            // ✅ Accept
-                            Container(
-                              decoration: BoxDecoration(
-                                color: Colors.green,
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: IconButton(
-                                icon: const Icon(Icons.check, color: Colors.white),
-                                onPressed: () => _updateOrderStatus(order['id'], 'active'),
-                              ),
-                            ),
-
-                            const SizedBox(width: 8),
-
-                            // 💬 Chat / Info button
-                            Container(
-                              decoration: BoxDecoration(
-                                color: Colors.blueGrey,
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: IconButton(
-                                onPressed: () => _showOrderDialog(order),
-                                icon: Image.asset(
-                                  'assets/icons/chat_icon.png',
-                                  width: 20,
-                                  height: 20,
-                                  color: Colors.white, // Apply white tint
-                                ),
-                              ),
-                            ),
-
-                            const SizedBox(width: 8),
-
-                            // ❌ Reject
-                            Container(
-                              decoration: BoxDecoration(
-                                color: Colors.red,
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: IconButton(
-                                icon: const Icon(Icons.close, color: Colors.white),
-                                onPressed: () => _rejectOrder(order['id']),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-
+                      ),
                     ),
-
-
-                   ),
-                );
-
+                  );
                 },
+              ),
             ),
           ),
         ],
@@ -319,202 +478,223 @@ class _PendingOrdersPageState extends State<PendingOrdersPage> {
   void _showOrderDialog(Map<String, dynamic> order) {
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: const Color(0xFF1F2937),
-        contentPadding: const EdgeInsets.all(20),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: [
-            const Icon(Icons.receipt_long, color: Colors.amber),
-            const SizedBox(width: 8),
-            Text('Order #${order['id'].toString().substring(0, 8)}', 
-                style: const TextStyle(color: Colors.white, fontSize: 18)),
-          ],
-        ),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Customer Info Section
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF374151),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.amber.withOpacity(0.3)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.person, color: Colors.amber, size: 20),
-                        const SizedBox(width: 8),
-                        Text('Customer Information',
-                            style: const TextStyle(
-                                color: Colors.amber,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600)),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Text(order['name'] ?? 'No Name',
-                        style: const TextStyle(
-                            color: Colors.black,
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 8),
-                    if (order['number'] != null)
-                      Row(
-                        children: [
-                          const Icon(Icons.phone, color: Colors.white70, size: 16),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Text(order['number'],
-                                style: const TextStyle(color: Colors.white70)),
-                          ),
-                        ],
-                      ),
-                    const SizedBox(height: 6),
-                    if (order['address'] != null)
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Icon(Icons.location_on, color: Colors.white70, size: 16),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Text(order['address'],
-                                style: const TextStyle(color: Colors.white70)),
-                          ),
-                        ],
-                      ),
-                  ],
-                ),
-              ),
+      builder: (_) {
+        // Get items once (outside of the widget list!)
+        final List items =
+            (order['items'] as List?) ??
+                (order['wooLineItems'] as List?) ??
+                const [];
 
-              const SizedBox(height: 16),
-              // Order Details Section
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF374151),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.blue.withOpacity(0.3)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.info_outline, color: Colors.blue, size: 20),
-                        const SizedBox(width: 8),
-                        const Text('Order Details',
-                            style: TextStyle(
-                                color: Colors.blue,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600)),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    if (order['timestamp'] != null)
-                      Row(
-                        children: [
-                          const Icon(Icons.access_time, color: Colors.white70, size: 16),
-                          const SizedBox(width: 6),
-                          Text(
-                            "Ordered: ${DateFormat('MMM d, h:mm a').format((order['timestamp'] as Timestamp).toDate())}",
-                            style: const TextStyle(color: Colors.white70),
-                          ),
-                        ],
-                      ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        const Icon(Icons.social_distance, color: Colors.amber, size: 16),
-                        const SizedBox(width: 6),
-                        Text(
-                          "Distance: ${(order['distance'] as double).toStringAsFixed(1)} km from shop",
-                          style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.w500),
-                        ),
-                      ],
-                    ),
-                    if ((order['deliveryNotes'] ?? '').toString().trim().isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      const Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Icon(Icons.note, color: Colors.green, size: 16),
-                          SizedBox(width: 6),
-                          Text('Delivery Notes:',
-                              style: TextStyle(color: Colors.green, fontWeight: FontWeight.w500)),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF111827),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(order['deliveryNotes'],
-                            style: const TextStyle(color: Colors.white70, fontStyle: FontStyle.italic)),
-                      ),
-                    ],
-                  ],
-                ),
+        return AlertDialog(
+          backgroundColor: const Color(0xFF1F2937),
+          contentPadding: const EdgeInsets.all(20),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              const Icon(Icons.receipt_long, color: Colors.amber),
+              const SizedBox(width: 8),
+              Text(
+                'Order #${order['id'].toString().substring(0, 8)}',
+                style: const TextStyle(color: Colors.white, fontSize: 18),
               ),
             ],
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Close", style: TextStyle(color: Colors.white70)),
-          ),
-          ElevatedButton.icon(
-            onPressed: () {
-              Navigator.pop(context);
-              _rejectOrder(order['id']);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Order rejected and removed'),
-                  backgroundColor: Colors.red,
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // --- Customer info card ---
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF374151),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.amber.withOpacity(0.3)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(children: const [
+                        Icon(Icons.person, color: Colors.amber, size: 20),
+                        SizedBox(width: 8),
+                        Text('Customer Information',
+                            style: TextStyle(
+                              color: Colors.amber,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            )),
+                      ]),
+                      const SizedBox(height: 12),
+                      Text(
+                        (order['customerName'] ?? 'No Name').toString(),
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(Icons.location_on,
+                              color: Colors.white70, size: 16),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              (order['address'] ?? '-').toString(),
+                              style: const TextStyle(color: Colors.white70),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-              );
-            },
-            icon: const Icon(Icons.cancel, color: Colors.white),
-            label: const Text('Reject', style: TextStyle(color: Colors.white)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+
+                const SizedBox(height: 16),
+
+                // --- Order details card ---
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF374151),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Row(children: [
+                        Icon(Icons.info_outline, color: Colors.blue, size: 20),
+                        SizedBox(width: 8),
+                        Text('Order Details',
+                            style: TextStyle(
+                              color: Colors.blue,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            )),
+                      ]),
+                      const SizedBox(height: 12),
+
+                      if (order['timestamp'] is Timestamp)
+                        Row(
+                          children: [
+                            const Icon(Icons.access_time,
+                                color: Colors.white70, size: 16),
+                            const SizedBox(width: 6),
+                            Text(
+                              "Ordered: ${DateFormat('MMM d, h:mm a').format(
+                                  (order['timestamp'] as Timestamp).toDate())}",
+                              style: const TextStyle(color: Colors.white70),
+                            ),
+                          ],
+                        ),
+
+                      const SizedBox(height: 8),
+
+                      Row(
+                        children: [
+                          const Icon(Icons.social_distance,
+                              color: Colors.amber, size: 16),
+                          const SizedBox(width: 6),
+                          Text(
+                            "Distance: ${_formatDistance(
+                                order['distance'] as double)} from shop",
+                            style: const TextStyle(
+                                color: Colors.amber,
+                                fontWeight: FontWeight.w500),
+                          ),
+                        ],
+                      ),
+
+                      // --- Items (if present) ---
+                      if (items.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        const Divider(color: Colors.white24),
+                        const SizedBox(height: 6),
+                        const Text(
+                          'Items',
+                          style: TextStyle(
+                              color: Colors.white, fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 8),
+
+                        ...items.map<Widget>((it) {
+                          // Defensive reads for dynamic structures
+                          final name = (it is Map && it['name'] != null)
+                              ? it['name'].toString()
+                              : 'Item';
+                          final qty = (it is Map && it['quantity'] != null)
+                              ? it['quantity'].toString()
+                              : '1';
+                          final lineTotal = (it is Map && it['total'] != null)
+                              ? it['total'].toString()
+                              : '';
+
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 2),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    '$name  x$qty',
+                                    overflow: TextOverflow.ellipsis,
+                                    style:
+                                    const TextStyle(color: Colors.white70),
+                                  ),
+                                ),
+                                Text(
+                                  lineTotal.isEmpty
+                                      ? ''
+                                      : '${order['currency'] ?? ''} $lineTotal',
+                                  style:
+                                  const TextStyle(color: Colors.white70),
+                                ),
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
-          ElevatedButton.icon(
-            onPressed: () {
-              Navigator.pop(context);
-              _updateOrderStatus(order['id'], 'active');
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Order accepted and moved to active'),
-                  backgroundColor: Colors.green,
-                ),
-              );
-            },
-            icon: const Icon(Icons.check_circle, color: Colors.white),
-            label: const Text('Accept', style: TextStyle(color: Colors.white)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child:
+              const Text("Close", style: TextStyle(color: Colors.white70)),
             ),
-          ),
-        ],
-      ),
+            ElevatedButton.icon(
+              onPressed: () {
+                Navigator.pop(context);
+                _rejectOrder(order);
+              },
+              icon: const Icon(Icons.cancel, color: Colors.white),
+              label:
+              const Text('Reject', style: TextStyle(color: Colors.white)),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            ),
+            ElevatedButton.icon(
+              onPressed: () {
+                Navigator.pop(context);
+                _acceptOrder(order);
+              },
+              icon: const Icon(Icons.check_circle, color: Colors.white),
+              label:
+              const Text('Accept', style: TextStyle(color: Colors.white)),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+            ),
+          ],
+        );
+      },
     );
   }
-
-
 }

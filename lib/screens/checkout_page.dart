@@ -8,9 +8,14 @@ import 'package:provider/provider.dart';
 import '../models/cart_provider.dart';
 import '../models/payment_method.dart';
 import '../widget/app_scaffold.dart';
+import '../services/chat_service.dart';
+import 'chat_thread_page.dart';
 import 'main_page.dart';
-import 'order_success_page.dart';
 import '../services/woocommerce_service.dart';
+import '../services/payment_service.dart';
+import 'package:cadeli/screens/hosted_checkout_page.dart';
+
+
 
 
 class CheckoutPage extends StatefulWidget {
@@ -25,11 +30,22 @@ class _CheckoutPageState extends State<CheckoutPage> with SingleTickerProviderSt
   String selectedTimeSlot = 'Morning';
   String selectedFrequency = 'Weekly';
   String selectedDay = 'Monday';
-  String selectedPayment = 'COD';
   Map<String, dynamic>? selectedAddress;
   List<Map<String, dynamic>> addressList = [];
-
   final WooCommerceService wooService = WooCommerceService();
+
+  final _payment = PaymentService();
+  bool _placing = false;
+
+  // Single source of truth for payment method
+  String _selectedMethod = '';
+  String? get selectedPayment => _selectedMethod;
+
+  void _handlePaymentMethodSelection(String method) {
+    setState(() {
+      _selectedMethod = method; // 'card' or 'cod'
+    });
+  }
 
   late AnimationController _controller;
   late Animation<double> _tabAnimation;
@@ -58,104 +74,305 @@ class _CheckoutPageState extends State<CheckoutPage> with SingleTickerProviderSt
 
     final addresses = snapshot.docs.map((doc) => doc.data()).toList();
 
+    if (!mounted) return;
     setState(() {
       addressList = addresses;
-      selectedAddress = addresses.firstWhere(
-            (a) => a['isDefault'] == true,
-        orElse: () => addresses.first,
-      );
+      if (addresses.isEmpty) {
+        selectedAddress = null;
+      } else {
+        // pick default if any, else the most recent
+        final idx = addresses.indexWhere((a) => a['isDefault'] == true);
+        selectedAddress = idx >= 0 ? addresses[idx] : addresses.first;
+      }
     });
   }
 
   Future<void> _placeOrder() async {
+    if (_placing) return;
+    setState(() => _placing = true);
+
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null || selectedAddress == null) return;
-
-    final cart = Provider.of<CartProvider>(context, listen: false);
-
-    // Inject email into address map so WooCommerce doesn't reject
-    selectedAddress = {
-      ...selectedAddress!,
-      'email': user.email ?? '',
-    };
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please sign in to place an order.')),
+      );
+      setState(() => _placing = false);
+      return;
+    }
 
     try {
-      // 1. Create WooCommerce order (unpaid)
+      // 🔐 fresh token
+      await user.getIdToken(true);
 
-      final wooService = WooCommerceService();
-      final wooOrder = await wooService.createWooOrder(
-        cart.cartItems.map((item) => item['product']).toList(),
-        selectedAddress!,
-        selectedPayment,
-        setPaid: false, // 🔴 Let admin set paid later
-      );
+      // 🛒 cart → [{id, quantity}]
+      final cart = context.read<CartProvider>();
+      final items = cart.cartItems.map<Map<String, dynamic>>((m) {
+        final prodId = m['product'] != null ? m['product'].id : m['id'];
+        return {
+          'id': int.tryParse(prodId.toString()) ?? 0,
+          'quantity': (m['quantity'] ?? 1) as int,
+        };
+      }).toList();
 
-      // Check if Woo order was created
-      if (wooOrder['id'] == null) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text("Failed to create WooCommerce order"),
-        ));
+      if (items.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Your cart is empty')),
+        );
+        setState(() => _placing = false);
         return;
       }
 
-      // 🔁 Fetch user's full name from Firestore
-      final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-      final fullName = userDoc.data()?['fullName'] ?? 'No Name';
+      // 👤 user info
+      final userEmail = user.email ?? '';
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      final fullName = (userDoc.data()?['fullName'] ?? '').toString().trim();
+
+      double? _toDouble(dynamic v) {
+        if (v == null) return null;
+        if (v is num) return v.toDouble();
+        return double.tryParse(v.toString());
+      }
 
 
-      final orderData = {
-        'uid': user.uid,
-        'type': isSubscription ? 'subscription' : 'normal',
-        'timestamp': FieldValue.serverTimestamp(),
-        'payment': selectedPayment,
-        'status': 'pending',
-        'wooOrderId': wooOrder['id'], // ✅ save Woo order ID
-        'totalCost': cart.totalCost,
-        'userName': "${user.displayName ?? ''} - ${selectedAddress?['city'] ?? ''}",
-        'addressSummary': selectedAddress?['label'] ?? '',
-        'deliveryNotes': selectedAddress?['notes'] ?? '',
-        'name': fullName,
-        'adminStatusHistory': [
-          {
-            'status': 'pending',
-            'timestamp': FieldValue.serverTimestamp(),
+      // ✅ robust lat/lng extractor without nested ternaries
+      double? lat, lng;
+      final addr = selectedAddress ?? {};
+
+      if (addr['geo'] is GeoPoint) {
+        final g = addr['geo'] as GeoPoint;
+        lat = g.latitude;
+        lng = g.longitude;
+      }
+
+      lat ??= _toDouble(addr['lat'] ?? addr['latitude']);
+      lng ??= _toDouble(addr['lng'] ?? addr['longitude']);
+
+      final loc = addr['location'];
+      if ((lat == null || lng == null) && loc is Map) {
+        lat ??= _toDouble(loc['lat']);
+        lng ??= _toDouble(loc['lng']);
+      }
+
+      final coords = addr['coords'];
+      if ((lat == null || lng == null) && coords is Map) {
+        lat ??= _toDouble(coords['lat']);
+        lng ??= _toDouble(coords['lng']);
+      }
+
+
+// 🔎 If still missing, try to backfill from the user's saved address doc
+      try {
+        final addrId = addr['id'] ?? addr['addressId'];
+        if ((lat == null || lng == null) && addrId != null) {
+          final addrDoc = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .collection('addresses')
+              .doc(addrId.toString())
+              .get();
+          final a = addrDoc.data();
+          if (a != null) {
+            if (a['geo'] is GeoPoint) {
+              final g = a['geo'] as GeoPoint;
+              lat ??= g.latitude;
+              lng ??= g.longitude;
+            }
+            lat ??= _toDouble(a['lat'] ?? a['latitude']);
+            lng ??= _toDouble(a['lng'] ?? a['longitude']);
           }
-        ],
-        'items': cart.cartItems.map((item) => {
-          'productId': item['product'].id,
-          'name': item['product'].name,
-          'brand': item['product'].brand,
-          'price': item['product'].price,
-          'imageUrl': item['product'].imageUrl,
-          'quantity': item['quantity'],
-          'size': item['size'],
-          'pack': item['pack'],
-        }).toList(),
+        }
+      } catch (e) {
+        debugPrint('Could not backfill lat/lng from saved address: $e');
+      }
+
+      debugPrint('🧭 selectedAddress=$selectedAddress => lat=$lat lng=$lng');
+
+      if (lat == null || lng == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please pick your exact location on the map.')),
+        );
+        setState(() => _placing = false);
+        return;
+      }
+
+
+
+      // 🏷️ split first/last for Woo (Woo requires standard keys)
+      final parts = fullName.split(' ').where((s) => s.trim().isNotEmpty).toList();
+      final firstName = parts.isNotEmpty ? parts.first : 'Customer';
+      final lastName = parts.length > 1 ? parts.sublist(1).join(' ') : '';
+
+      // 🏠 address for Woo (standard keys)
+      final wooAddress = {
+        'first_name': firstName,
+        'last_name' : lastName,
+        'address_1': selectedAddress?['line1'] ?? selectedAddress?['address'] ?? 'Address',
+        'city'     : selectedAddress?['city'] ?? 'Larnaca',
+        'country'  : selectedAddress?['country'] ?? 'CY',
+        'email'    : (userEmail.isNotEmpty ? userEmail : 'noemail@cadeli.app'),
+        'phone'    : selectedAddress?['phone'] ?? '',
       };
 
-      // 2. Save to Firestore
-      await FirebaseFirestore.instance.collection('orders').add(orderData);
+      // 📝 your preferred meta naming (only subscription has time_slot)
+      final meta = <String, dynamic>{
+        'customer_name'      : fullName.isNotEmpty ? fullName : firstName,
+        'address_line'       : wooAddress['address_1'],
+        'city'               : wooAddress['city'],
+        'country'            : wooAddress['country'],
+        'phone'              : wooAddress['phone'],
+        'delivery_type'      : isSubscription ? 'subscription' : 'normal',
+        'time_slot'          : isSubscription ? selectedTimeSlot : null,
+        'frequency'          : isSubscription ? selectedFrequency : null,
+        'preferred_day'      : isSubscription ? selectedDay : null,
+        'order_placed_at_ms' : DateTime.now().millisecondsSinceEpoch, // client stamp (server will also store)
+        'location_lat'       : lat,
+        'location_lng'       : lng,
 
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text("Order placed! Waiting for admin approval"),
-      ));
 
-      // 3. Clear cart + navigate
-      cart.clearCart();
-      Navigator.pushReplacementNamed(context, '/order_success');
+      }..removeWhere((k, v) => v == null);
 
+      // 💳 method
+      final methodSlug = _selectedMethod == 'card' ? 'stripe' : 'cod';
+
+      final traceId = 'client-${DateTime.now().millisecondsSinceEpoch}-${user.uid.substring(0,6)}';
+      debugPrint('🧾 TRACE $traceId starting order. items=${items.length}');
+
+      // ✅ basic validations
+      if (_selectedMethod != 'card' && _selectedMethod != 'cod') {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please choose a payment method.')),
+        );
+        setState(() => _placing = false);
+        return;
+      }
+
+      if (isSubscription) {
+        if ((selectedDay.isEmpty) || (selectedTimeSlot.isEmpty)) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Select preferred day and time slot.')),
+          );
+          setState(() => _placing = false);
+          return;
+        }
+      }
+
+
+      if (((wooAddress['address_1'] ?? '').toString().trim()).isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please add your street address.')),
+        );
+        setState(() => _placing = false);
+        return;
+      }
+
+
+
+      // 🔁 call server
+      debugPrint('Placing order with lat=$lat lng=$lng meta=$meta');
+      final result = await _payment.createWooOrderAuthorized(
+        userId: user.uid,
+        cartItems: items,
+        address: wooAddress,   // <-- send Woo-standard keys
+        paymentMethodSlug: methodSlug,
+        meta: meta,            // <-- send your custom/meta keys here
+      );
+
+// 💬 ensure chat thread for THIS order (docId == orderId)
+      final orderId = result.docId; // 👈 from your server result
+      final customerUid = user.uid;
+
+      await ChatService.instance.ensureChat(
+        orderId: orderId,
+        customerId: customerUid,
+        adminId: 'ADMIN', // TODO: replace with your real admin UID later
+        status: 'pending',
+      );
+
+// (Optional) first system message
+      await FirebaseFirestore.instance
+          .collection('chats')
+          .doc(orderId)
+          .collection('messages')
+          .add({
+        'senderId': 'system',
+        'text': 'Order placed. Waiting for admin approval.',
+        'type': 'system',
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+
+      if (_selectedMethod == 'card') {
+        // 🌐 open hosted payment page
+        final success = await Navigator.of(context).push<bool>(
+          MaterialPageRoute(
+            builder: (_) => HostedCheckoutPage(
+              payUrl: result.payUrl.toString(),
+              orderDocId: result.docId,
+            ),
+          ),
+        );
+
+        if (success == true) {
+          cart.clearCart();
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Payment successful!')),
+          );
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(
+              builder: (_) => ChatThreadPage(
+                orderId: orderId,
+                customerId: customerUid,
+                isAdminView: false,
+              ),
+            ),
+                (route) => false,
+          );
+
+        } else {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Payment not completed.')),
+          );
+        }
+      } else {
+        // 🧾 COD
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Order placed. Awaiting admin approval.')),
+        );
+        cart.clearCart();
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(
+            builder: (_) => ChatThreadPage(
+              orderId: orderId,
+              customerId: customerUid,
+              isAdminView: false,
+            ),
+          ),
+              (route) => false,
+        );
+
+      }
     } catch (e) {
-      print("❌ Error placing order: $e");
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text("Something went wrong. Try again."),
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not place order: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _placing = false);
     }
   }
+
+
+
 
   @override
   Widget build(BuildContext context) {
     final cartProvider = Provider.of<CartProvider>(context);
     final cartItems = cartProvider.cartItems;
+    final bool canPlace = cartItems.isNotEmpty && selectedAddress != null && _selectedMethod.isNotEmpty;
 
     return AppScaffold(
       currentIndex: 0,
@@ -264,12 +481,10 @@ class _CheckoutPageState extends State<CheckoutPage> with SingleTickerProviderSt
                         children: [
                           ClipRRect(
                             borderRadius: BorderRadius.circular(12),
-                            child: Image.network(
-                              product.imageUrl,
-                              width: 60,
-                              height: 60,
-                              fit: BoxFit.cover,
-                            ),
+                            child: (product.imageUrl ?? '').toString().isNotEmpty
+                                ? Image.network(product.imageUrl, width: 60, height: 60, fit: BoxFit.cover)
+                                : const SizedBox(width: 60, height: 60, child: Icon(Icons.image_not_supported)),
+
                           ),
                           const SizedBox(width: 12),
                           Expanded(
@@ -323,9 +538,21 @@ class _CheckoutPageState extends State<CheckoutPage> with SingleTickerProviderSt
 
                     const SizedBox(height: 24),
                     const Text('FREQUENCY', style: _sectionTitle),
-                    _buildChips(['Weekly', 'Biweekly', 'Monthly'], selectedFrequency, (val) {
-                      setState(() => selectedFrequency = val);
-                    }),
+                    const SizedBox(height: 24),
+                    const Text('FREQUENCY', style: _sectionTitle),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 10,
+                      children: [
+                        ChoiceChip(
+                          label: const Text('Weekly'),
+                          selected: true,
+                          onSelected: (_) {},
+                          selectedColor: const Color(0xFF1A233D),
+                          labelStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
+                        ),
+                      ],
+                    ),
                     const SizedBox(height: 24),
                     const Text('PREFERRED DAY', style: _sectionTitle),
                     const SizedBox(height: 6),
@@ -336,80 +563,72 @@ class _CheckoutPageState extends State<CheckoutPage> with SingleTickerProviderSt
                   const Text('PAYMENT METHOD', style: _sectionTitle),
                   const SizedBox(height: 6),
 
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Recently used',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    height: 110,
-                    child: ListView(
-                      scrollDirection: Axis.horizontal,
-                      children: [
-                        _buildPaymentCard(method: PaymentMethod(type: 'visa', last4: '4242', expiry: '12/26')),
-                        _buildPaymentCard(method: PaymentMethod(type: 'mastercard', last4: '7890', expiry: '08/25')),
-                        _buildAddPaymentCard(),
+                  // const SizedBox(height: 8),
+                  // const Text(
+                  //   'Recently used',
+                  //   style: TextStyle(
+                  //     fontSize: 16,
+                  //     fontWeight: FontWeight.bold,
+                  //     color: Colors.black,
+                  //   ),
+                  // ),
+                  // const SizedBox(height: 12),
+                  // SizedBox(
+                  //   height: 110,
+                  //   child: ListView(
+                  //     scrollDirection: Axis.horizontal,
+                  //     children: [
+                  //       _buildPaymentCard(method: PaymentMethod(type: 'visa', last4: '4242', expiry: '12/26')),
+                  //       _buildPaymentCard(method: PaymentMethod(type: 'mastercard', last4: '7890', expiry: '08/25')),
+                  //       _buildAddPaymentCard(),
+                  //
+                  //     ],
+                  //   ),
+                  // ),
+                  // const SizedBox(height: 20),
 
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-
+                  // Replace your current payment buttons with:
                   _buildPaymentButton(
                     icon: Icons.credit_card,
                     label: 'Pay with Card',
-                    isSelected: selectedPayment == 'Card',
-                    onTap: () {
-                      setState(() => selectedPayment = 'Card');
-                    },
+                    isSelected: _selectedMethod == 'card',
+                    onTap: () => _handlePaymentMethodSelection('card'),
                   ),
                   _buildPaymentButton(
                     icon: Icons.attach_money,
                     label: 'Cash on Delivery',
-                    isSelected: selectedPayment == 'COD',
-                    onTap: () {
-                      setState(() => selectedPayment = 'COD');
-                    },
-                  ),
-                  _buildPaymentButton(
-                    icon: Icons.phone_iphone,
-                    label: 'Apple Pay',
-                    isSelected: selectedPayment == 'ApplePay',
-                    onTap: () {
-                      setState(() => selectedPayment = 'ApplePay');
-                    },
+                    isSelected: _selectedMethod == 'cod',
+                    onTap: () => _handlePaymentMethodSelection('cod'),
                   ),
 
+                  const SizedBox(height: 24),
 
-                  const SizedBox(height: 28),
                   GestureDetector(
-                    onTap: _placeOrder,
-                    child: Container(
-                      width: double.infinity,
-                      height: 60,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF1A2D3D),
-                        borderRadius: BorderRadius.circular(30),
-                        boxShadow: const [
-                          BoxShadow(color: Colors.black38, offset: Offset(0, 8), blurRadius: 24),
-                        ],
-                      ),
-                      alignment: Alignment.center,
-                      child: const Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.payment, color: Colors.white),
-                          SizedBox(width: 10),
-                          Text(
-                            'Place Order',
-                            style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-                          ),
-                        ],
+                    onTap: canPlace ? _placeOrder : null,
+                    child: Opacity(
+                      opacity: canPlace ? 1 : 0.5,
+                      child: Container(
+                        width: double.infinity,
+                        height: 60,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1A2D3D),
+                          borderRadius: BorderRadius.circular(30),
+                          boxShadow: const [
+                            BoxShadow(color: Colors.black38, offset: Offset(0, 8), blurRadius: 24),
+                          ],
+                        ),
+                        alignment: Alignment.center,
+                        child: const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.payment, color: Colors.white),
+                            SizedBox(width: 10),
+                            Text(
+                              'Place Order',
+                              style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -587,7 +806,7 @@ class _CheckoutPageState extends State<CheckoutPage> with SingleTickerProviderSt
                 ),
 
                 leading: const Icon(Icons.location_on_outlined, color: Colors.black54),
-                trailing: selectedAddress == a['label']
+                trailing: (selectedAddress?['label'] == a['label'])
                     ? const Icon(Icons.check_circle, color: Colors.green)
                     : null,
                 onTap: () {
@@ -600,12 +819,29 @@ class _CheckoutPageState extends State<CheckoutPage> with SingleTickerProviderSt
             }).toList(),
             const SizedBox(height: 8),
             ElevatedButton.icon(
-              onPressed: () {
+              onPressed: () async {
                 Navigator.pop(context);
-                Navigator.push(
+                final picked = await Navigator.push<Map<String, dynamic>?>(
                   context,
                   MaterialPageRoute(builder: (_) => const PickLocationPage()),
                 );
+
+                await _loadAddresses();
+                if (!mounted) return;
+
+                setState(() {
+                  final idx = addressList.indexWhere((a) => a['isDefault'] == true);
+                  selectedAddress = idx >= 0
+                      ? addressList[idx]
+                      : (addressList.isNotEmpty ? addressList.first : null);
+                });
+
+
+                if (picked != null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Address saved')),
+                  );
+                }
               },
               icon: const Icon(Icons.add),
               label: const Text("Add new Address"),
@@ -632,11 +868,8 @@ class _CheckoutPageState extends State<CheckoutPage> with SingleTickerProviderSt
 
     return GestureDetector(
       onTap: () {
-        setState(() {
-          selectedPayment = method.type;
-        });
-      },
-      child: Container(
+        _handlePaymentMethodSelection(method.type); // ✅ Use the setter method
+      },      child: Container(
         width: 140,
         margin: const EdgeInsets.only(right: 14),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -739,13 +972,10 @@ class _CheckoutPageState extends State<CheckoutPage> with SingleTickerProviderSt
 
   Widget _buildAddPaymentCard() {
     return GestureDetector(
-      onTap: () {
-        // Navigate to add payment page or show a modal
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Add payment method coming soon')),
-        );
-      },
-      child: Container(
+      onTap: () async {
+        _handlePaymentMethodSelection('card'); // ✅ Use the setter method
+        await _placeOrder();
+      },      child: Container(
         width: 140,
         margin: const EdgeInsets.only(right: 14),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -784,6 +1014,3 @@ class _CheckoutPageState extends State<CheckoutPage> with SingleTickerProviderSt
   }
 
 }
-
-
-

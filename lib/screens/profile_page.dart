@@ -244,32 +244,46 @@ class _ProfilePageState extends State<ProfilePage> {
                   return GestureDetector(
                     onTap: () async {
                       final wooService = WooCommerceService();
-                      final wooProducts = await wooService.fetchProducts();
+                      try {
+                        // ✅ 1) Get the full product directly by ID (way cheaper than fetching all)
+                        final matched = await wooService.fetchProductById(productId);
 
-                      final matched = wooProducts.firstWhere(
-                            (p) => p['id'].toString() == product.id,
-                        orElse: () => null,
-                      );
+                        if (matched != null) {
+                          // ✅ 2) Build category map for parsing
+                          final catMap = await wooService.fetchAllCategoriesMap();
 
-                      if (matched != null) {
-                        final fullProduct = Product.fromWooJson(matched);
+                          // ✅ 3) Parse into your Product model
+                          final fullProduct = Product.fromWooJson(
+                            matched, // Map<String, dynamic>
+                            catMap,
+                          );
 
-                        await FirebaseFirestore.instance
-                            .collection('users')
-                            .doc(user.uid)
-                            .collection('recentlyViewed')
-                            .doc(fullProduct.id)
-                            .set({'viewedAt': Timestamp.now()});
+                          // ✅ 4) Save to recently viewed
+                          await FirebaseFirestore.instance
+                              .collection('users')
+                              .doc(user.uid)
+                              .collection('recentlyViewed')
+                              .doc(fullProduct.id)
+                              .set({'viewedAt': Timestamp.now()});
 
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => ProductDetailPage(product: fullProduct),
-                          ),
-                        );
-                      } else {
+                          // ✅ 5) Navigate (safe after awaits)
+                          if (!mounted) return;
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ProductDetailPage(product: fullProduct),
+                            ),
+                          );
+                        } else {
+                          if (!mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Product info could not be loaded.')),
+                          );
+                        }
+                      } catch (e) {
+                        if (!mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Product info could not be loaded.')),
+                          SnackBar(content: Text('Failed to load product: $e')),
                         );
                       }
                     },
@@ -365,7 +379,10 @@ class _ProfilePageState extends State<ProfilePage> {
     }
 
     return SafeArea(
+      top: true,
+      bottom: false,
       child: SingleChildScrollView(
+        //padding: const EdgeInsets.fromLTRB(20, 20, 20, 8), // small bottom so content can sit under bar
         padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
