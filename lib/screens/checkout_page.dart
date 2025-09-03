@@ -284,12 +284,20 @@ class _CheckoutPageState extends State<CheckoutPage> with SingleTickerProviderSt
       final orderId = result.docId; // 👈 from your server result
       final customerUid = user.uid;
 
-      await ChatService.instance.ensureChat(
-        orderId: orderId,
-        customerId: customerUid,
-        adminId: 'ADMIN', // TODO: replace with your real admin UID later
-        status: 'pending',
-      );
+      await FirebaseFirestore.instance
+          .collection('chats')
+          .doc(orderId) // chatId == orderId
+          .set({
+        'chatId': orderId,
+        'orderId': orderId,
+        'customerId': customerUid,   // 👈 REQUIRED by rules
+        'adminId': 'ADMIN',          // replace with real admin uid later
+        'status': 'pending',
+        'createdAt': FieldValue.serverTimestamp(),
+        'lastMessage': 'Order placed. Waiting for admin approval.',
+        'lastSenderId': 'system',
+      }, SetOptions(merge: true));
+
 
 // (Optional) first system message
       await FirebaseFirestore.instance

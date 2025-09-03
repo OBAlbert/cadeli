@@ -16,6 +16,9 @@ class _RegisterPageState extends State<RegisterPage> {
   int currentStep = 0;
   bool isCodeSent = false;
   String? verificationId;
+  double? pickedLat;
+  double? pickedLng;
+
 
   final phoneController = TextEditingController();
   final otpController = TextEditingController();
@@ -28,11 +31,19 @@ class _RegisterPageState extends State<RegisterPage> {
   final otpFocusNodes = List.generate(6, (_) => FocusNode());
   final otpValues = List.filled(6, '');
 
+
   // ─────────────────────────────────────────
   // PHONE AUTH & FIRESTORE LOGIC (unchanged)
+  String e164(String raw) {
+    final p = raw.trim();
+    if (p.startsWith('+')) return p;
+    // fallback: prepend your default country code if needed
+    return '+357$p';
+  }
+
   void sendOtp() async {
     await FirebaseAuth.instance.verifyPhoneNumber(
-      phoneNumber: phoneController.text.trim(),
+      phoneNumber: e164(phoneController.text),
       verificationCompleted: (_) {},
       verificationFailed: (e) => _showError("Verification failed: ${e.message}"),
       codeSent: (id, _) => setState(() {
@@ -56,18 +67,31 @@ class _RegisterPageState extends State<RegisterPage> {
     }
   }
 
-  void createAccount() async {
+  Future<void> createAccount() async {
     if (passwordController.text != confirmPasswordController.text) {
-      return _showError("Passwords do not match.");
+      _showError("Passwords do not match.");
+      return;
     }
+
+    // Must be signed in already via phone (after verifyOtp)
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      _showError("Session expired. Please verify your phone again.");
+      setState(() { currentStep = 0; isCodeSent = false; });
+      return;
+    }
+
     try {
-      await FirebaseAuth.instance.signOut();
-      final uc = await FirebaseAuth.instance
-          .createUserWithEmailAndPassword(
+      // 1) LINK email/password to the same account (no signOut!)
+      final emailCred = EmailAuthProvider.credential(
         email: emailController.text.trim(),
         password: passwordController.text.trim(),
       );
-      final uid = uc.user!.uid;
+      await user.linkWithCredential(emailCred);
+
+      final uid = user.uid;
+
+      // 2) Write/merge the user profile
       await FirebaseFirestore.instance.collection('users').doc(uid).set({
         'fullName': nameController.text.trim(),
         'email': emailController.text.trim(),
@@ -79,7 +103,12 @@ class _RegisterPageState extends State<RegisterPage> {
         'orderHistory': [],
         'activeOrders': [],
         'createdAt': Timestamp.now(),
-      });
+        // store last known coordinates at root too (handy for queries)
+        'lat': pickedLat,
+        'lng': pickedLng,
+      }, SetOptions(merge: true));
+
+      // 3) Save a default address with coordinates
       await FirebaseFirestore.instance
           .collection('users')
           .doc(uid)
@@ -88,7 +117,19 @@ class _RegisterPageState extends State<RegisterPage> {
         'label': addressController.text.trim(),
         'isDefault': true,
         'timestamp': Timestamp.now(),
+        // GeoPoint so you can use Firestore geospatial queries later
+        'location': (pickedLat != null && pickedLng != null)
+            ? GeoPoint(pickedLat!, pickedLng!)
+            : null,
+        // store scalar copies too (optional convenience)
+        'lat': pickedLat,
+        'lng': pickedLng,
       });
+
+      // 4) (Optional but recommended) send email verification
+      await user.sendEmailVerification();
+
+      // 5) Move to the verify email screen
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => const VerifyEmailPage()),
@@ -348,11 +389,23 @@ class _RegisterPageState extends State<RegisterPage> {
               const SizedBox(height: 16),
               ElevatedButton.icon(
                 onPressed: () async {
+                  // Expect your map picker to return: { 'label': String, 'lat': double, 'lng': double }
                   final picked = await Navigator.pushNamed(context, '/map-picker');
-                  if (picked is String && picked.isNotEmpty) {
+
+                  if (picked is Map) {
+                    setState(() {
+                      addressController.text = (picked['label'] as String?) ?? '';
+                      pickedLat = picked['lat'] as double?;
+                      pickedLng = picked['lng'] as double?;
+                    });
+                  } else if (picked is String && picked.isNotEmpty) {
+                    // Backwards-compat: if your picker still returns only a string
                     setState(() => addressController.text = picked);
+                    pickedLat = null;
+                    pickedLng = null;
                   }
                 },
+
                 icon: const Icon(Icons.map),
                 label: const Text("Choose on Map",
                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),

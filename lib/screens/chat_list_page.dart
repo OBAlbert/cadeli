@@ -10,18 +10,36 @@ class ChatListPage extends StatelessWidget {
   const ChatListPage({super.key, this.isAdmin = false});
   final bool isAdmin;
 
+
+  // route helper for bottom tabs
+  void _goTab(BuildContext context, int i) {
+    // replace these with your real named routes if different
+    const routes = ['/home', '/products', '/messages', '/profile'];
+
+    if (i == 2) {
+      // Messages tab → open list explicitly
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const ChatListPage()),
+      );
+      return;
+    }
+    if (i >= 0 && i < routes.length) {
+      Navigator.of(context).pushReplacementNamed(routes[i]);
+    }
+  }
+
+
   @override
   Widget build(BuildContext context) {
     final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
 
     return AppScaffold(
       currentIndex: 2, // Messages tab
-      onTabSelected: (_) {},
+      onTabSelected: (i) => _goTab(context, i),
       child: Stack(
         fit: StackFit.expand,
         children: [
-          Positioned.fill(child: Image.asset('assets/img/fade_base.jpg', fit: BoxFit.cover)),
-          Positioned.fill(child: Container(color: Colors.white.withOpacity(0.86))),
+          Positioned.fill(child: Image.asset('assets/background/fade_base.jpg', fit: BoxFit.cover)),
           Padding(
             padding: const EdgeInsets.only(top: 8),
             child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
@@ -70,42 +88,33 @@ class ChatListPage extends StatelessWidget {
                         ),
                         child: Row(
                           children: [
-                            Container(
-                              height: 44, width: 44,
-                              alignment: Alignment.center,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF1A233D).withOpacity(0.08),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: const Icon(Icons.receipt_long, color: Color(0xFF1A233D)),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Order #${t.orderId}',
-                                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: Color(0xFF1A233D)),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    t.lastMessage.isNotEmpty ? t.lastMessage : 'No messages yet',
-                                    maxLines: 1, overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(fontSize: 13, color: Colors.black54, fontWeight: FontWeight.w500),
-                                  ),
-                                  if ((m['customerEmail'] ?? '').toString().isNotEmpty) ...[
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      m['customerEmail'],
-                                      maxLines: 1, overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(fontSize: 12, color: Colors.black45),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            ),
+                            // existing leading icon + Expanded(...) block stays as-is above
                             const SizedBox(width: 8),
+
+                            // ⬇️ ADD THIS STATUS CHIP
+                            if ((m['status'] ?? '').toString().isNotEmpty)
+                              Container(
+                                margin: const EdgeInsets.only(right: 6),
+                                child: Chip(
+                                  label: Text(
+                                    (m['status'] as String).toUpperCase(),
+                                    style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+                                  ),
+                                  padding: EdgeInsets.zero,
+                                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  visualDensity: VisualDensity.compact,
+                                  backgroundColor: ((m['status'] ?? '') == 'pending')
+                                      ? Colors.orange.withOpacity(0.15)
+                                      : Colors.green.withOpacity(0.15),
+                                  side: BorderSide(
+                                    color: ((m['status'] ?? '') == 'pending')
+                                        ? Colors.orange
+                                        : Colors.green,
+                                    width: 0.6,
+                                  ),
+                                ),
+                              ),
+
                             const Icon(Icons.chevron_right, color: Colors.black45),
                           ],
                         ),

@@ -118,6 +118,7 @@ flutter:
     - assets/background/start_background.jpg
     - assets/background/startpic.jpg
     - assets/background/startcadeli.jpg
+    - assets/background/fade_base.jpg
     - assets/cadeli.logo.jpg
     - assets/index/index1.jpg
     - assets/index/index2.jpg

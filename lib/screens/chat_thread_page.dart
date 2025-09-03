@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../services/chat_service.dart';
 import '../models/chat_message.dart';
 import '../widget/app_scaffold.dart';
+import 'chat_list_page.dart';
 
 class ChatThreadPage extends StatefulWidget {
   const ChatThreadPage({
@@ -61,6 +62,26 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
   );
   }
 
+  // ADD/KEEP THIS inside _ChatThreadPageState (above build)
+  void _goTab(BuildContext context, int i) {
+  // replace with your real named routes if different
+  const routes = ['/home', '/products', '/messages', '/profile'];
+
+  if (i == 2) {
+  // Messages tab → open list explicitly
+  Navigator.of(context).pushReplacement(
+  MaterialPageRoute(builder: (_) => const ChatListPage()),
+  );
+  return;
+  }
+  if (i >= 0 && i < routes.length) {
+  Navigator.of(context).pushReplacementNamed(routes[i]);
+  }
+  }
+
+
+
+
   @override
   Widget build(BuildContext context) {
   final me = FirebaseAuth.instance.currentUser?.uid ?? '';
@@ -68,13 +89,12 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
 
   return AppScaffold(
   currentIndex: 2,
-  onTabSelected: (_) {},
+  onTabSelected: (i) => _goTab(context, i),
   child: Stack(
   fit: StackFit.expand,
   children: [
-  Positioned.fill(child: Image.asset('assets/img/fade_base.jpg', fit: BoxFit.cover)),
-  Positioned.fill(child: Container(color: Colors.white.withOpacity(0.86))),
-  Column(
+  Positioned.fill(child: Image.asset('assets/background/fade_base.jpg', fit: BoxFit.cover)),
+   Column(
   children: [
   // Inline header under the global AppScaffold bar
   Padding(
@@ -180,12 +200,12 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
   builder: (_) {
   final c = TextEditingController();
   return AlertDialog(
-  title: const Text('Set ETA (minutes)'),
-  content: TextField(
-  controller: c,
-  keyboardType: TextInputType.number,
-  decoration: const InputDecoration(hintText: 'e.g. 12'),
-  ),
+    title: const Text('Set ETA (minutes)'),
+    content: TextField(
+      controller: c,
+      keyboardType: TextInputType.number,
+      decoration: const InputDecoration(hintText: 'e.g. 12'),
+      ),
   actions: [
   TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
   ElevatedButton(
@@ -255,6 +275,24 @@ class _Bubble extends StatelessWidget {
   final String text;
   final bool isMine;
   final DateTime time;
+
+  //  route helper for bottom tabs
+  void _goTab(BuildContext context, int i) {
+    // replace these with your real named routes if different
+    const routes = ['/home', '/products', '/messages', '/profile'];
+
+    if (i == 2) {
+      // Messages tab → open list explicitly
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const ChatListPage()),
+      );
+      return;
+    }
+    if (i >= 0 && i < routes.length) {
+      Navigator.of(context).pushReplacementNamed(routes[i]);
+    }
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -440,43 +478,93 @@ class _OrderDetailsSheet extends StatelessWidget {
               child: ListView(
                 controller: controller,
                 children: [
-                  Center(child: Container(width: 40, height: 5, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(4)))),
-                  const SizedBox(height: 14),
-                  Text('Order #$orderId', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  // drag handle
+                  Center(
+                    child: Container(
+                      width: 44,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[300],
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Title
+                  Text(
+                    'Order #$orderId',
+                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+                  ),
                   if (email.isNotEmpty) ...[
                     const SizedBox(height: 4),
-                    Text('Email: $email', style: const TextStyle(color: Colors.black54)),
+                    Text(email, style: const TextStyle(color: Colors.black54)),
                   ],
-                  const SizedBox(height: 12),
-                  const Text('Items', style: TextStyle(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 6),
+
+                  const SizedBox(height: 16),
+                  const Divider(height: 24),
+
+                  // Items header
+                  const Text('Items', style: TextStyle(fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 8),
+
+                  // Items list (name x qty .... price)
                   ...items.map((it) {
                     final name = (it is Map && it['name'] != null) ? it['name'].toString() : 'Item';
                     final qty  = (it is Map && it['quantity'] != null) ? it['quantity'].toString() : '1';
                     final price = (it is Map && it['total'] != null) ? it['total'].toString() : '';
                     return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      padding: const EdgeInsets.symmetric(vertical: 6),
                       child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Expanded(child: Text('$name × $qty')),
-                          Text(price.isNotEmpty ? '$currency $price' : ''),
+                          Expanded(
+                            child: Text(
+                              '$name × $qty',
+                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                          Text(
+                            price.isNotEmpty ? '$currency $price' : '',
+                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                          ),
                         ],
                       ),
                     );
                   }),
-                  const SizedBox(height: 14),
-                  const Divider(),
-                  const SizedBox(height: 10),
-                  const Text('Delivery', style: TextStyle(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 6),
-                  Text((address['address_1'] ?? address['line1'] ?? address['address'] ?? '').toString()),
-                  Text((address['city'] ?? '').toString()),
-                  Text((address['country'] ?? '').toString()),
-                  const SizedBox(height: 14),
-                  const Divider(),
-                  const SizedBox(height: 10),
-                  Text('Total: $currency $total', style: const TextStyle(fontWeight: FontWeight.bold)),
+
+                  const SizedBox(height: 16),
+                  const Divider(height: 24),
+
+                  // Delivery header
+                  const Text('Delivery', style: TextStyle(fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 8),
+
+                  // Delivery lines
+                  Text(
+                    (address['address_1'] ?? address['line1'] ?? address['address'] ?? '').toString(),
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  if ((address['city'] ?? '').toString().isNotEmpty)
+                    Text(address['city'], style: const TextStyle(color: Colors.black54)),
+                  if ((address['country'] ?? '').toString().isNotEmpty)
+                    Text(address['country'], style: const TextStyle(color: Colors.black54)),
+
+                  const SizedBox(height: 16),
+                  const Divider(height: 24),
+
+                  // Total
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Total', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                      Text(
+                        '$currency $total',
+                        style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 12),
                 ],
               ),
             );
