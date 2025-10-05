@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -28,44 +29,43 @@ class _RegisterPageState extends State<RegisterPage> {
   final passwordController = TextEditingController();
   final confirmPasswordController = TextEditingController();
 
+  bool isLoading=false; int? forceResendToken; int resend=0; Timer? _t;
+  @override void dispose(){ for(final f in otpFocusNodes) f.dispose();
+  phoneController.dispose(); otpController.dispose(); nameController.dispose();
+  emailController.dispose(); addressController.dispose(); passwordController.dispose();
+  confirmPasswordController.dispose(); _t?.cancel(); super.dispose(); }
+
+
   final otpFocusNodes = List.generate(6, (_) => FocusNode());
   final otpValues = List.filled(6, '');
 
 
-  // ─────────────────────────────────────────
   // PHONE AUTH & FIRESTORE LOGIC (unchanged)
-  String e164(String raw) {
-    final p = raw.trim();
-    if (p.startsWith('+')) return p;
-    // fallback: prepend your default country code if needed
-    return '+357$p';
-  }
+  String e164(String raw){ final x=raw.trim().replaceAll(' ','');
+  if(RegExp(r'^\+\d{7,15}$').hasMatch(x)) return x;
+  if(x.startsWith('0')) return '+357${x.substring(1)}'; return '+357$x'; }
 
-  void sendOtp() async {
+  Future<void> sendOtp() async{
+    if(isLoading||resend>0) return; setState(()=>isLoading=true);
     await FirebaseAuth.instance.verifyPhoneNumber(
-      phoneNumber: e164(phoneController.text),
-      verificationCompleted: (_) {},
-      verificationFailed: (e) => _showError("Verification failed: ${e.message}"),
-      codeSent: (id, _) => setState(() {
-        verificationId = id;
-        isCodeSent = true;
-      }),
-      codeAutoRetrievalTimeout: (id) => verificationId = id,
-    );
-  }
+      phoneNumber:e164(phoneController.text),
+      timeout:const Duration(seconds:60),
+      forceResendingToken:forceResendToken,
+      verificationCompleted:(_){},
+      verificationFailed:(e)=>_showError(e.message??'OTP failed'),
+      codeSent:(id, frt){ setState((){verificationId=id; isCodeSent=true; forceResendToken=frt; resend=60;});
+      _t?.cancel(); _t=Timer.periodic(const Duration(seconds:1),(tt){ if(resend==0) tt.cancel(); else setState(()=>resend--);}); },
+      codeAutoRetrievalTimeout:(id){ verificationId=id; },
+    ); setState(()=>isLoading=false);}
 
-  void verifyOtp() async {
-    try {
-      final cred = PhoneAuthProvider.credential(
-        verificationId: verificationId!,
-        smsCode: otpController.text.trim(),
-      );
-      await FirebaseAuth.instance.signInWithCredential(cred);
-      nextStep();
-    } catch (_) {
-      _showError("Invalid OTP.");
-    }
-  }
+  Future<void> verifyOtp() async{
+    if(verificationId==null||otpValues.join().length!=6){_showError('Enter 6-digit code'); return;}
+    try{ setState(()=>isLoading=true);
+    final cred=PhoneAuthProvider.credential(verificationId:verificationId!, smsCode:otpValues.join());
+    await FirebaseAuth.instance.signInWithCredential(cred); nextStep();
+    } on FirebaseAuthException catch(e){ _showError(e.message??'Invalid OTP'); }
+    finally{ setState(()=>isLoading=false); } }
+
 
   Future<void> createAccount() async {
     if (passwordController.text != confirmPasswordController.text) {
@@ -93,20 +93,16 @@ class _RegisterPageState extends State<RegisterPage> {
 
       // 2) Write/merge the user profile
       await FirebaseFirestore.instance.collection('users').doc(uid).set({
-        'fullName': nameController.text.trim(),
-        'email': emailController.text.trim(),
-        'phone': phoneController.text.trim(),
-        'address': addressController.text.trim(),
-        'notes': '',
-        'bio': '',
-        'favourites': [],
-        'orderHistory': [],
-        'activeOrders': [],
-        'createdAt': Timestamp.now(),
-        // store last known coordinates at root too (handy for queries)
-        'lat': pickedLat,
-        'lng': pickedLng,
-      }, SetOptions(merge: true));
+        'fullName'   : nameController.text.trim(),
+        'firstName'  : nameController.text.trim().split(' ').first,
+        'email'      : emailController.text.trim(),
+        'phoneE164'  : e164(phoneController.text),   // store only E.164
+        'address'    : addressController.text.trim(),
+        'notes'      : '', 'bio':'' ,'favourites':[], 'orderHistory':[], 'activeOrders':[],
+        'isAdmin'    : false,
+        'createdAt'  : Timestamp.now(),
+        'lat'        : pickedLat, 'lng': pickedLng,
+      }, SetOptions(merge:true));
 
       // 3) Save a default address with coordinates
       await FirebaseFirestore.instance
@@ -127,13 +123,9 @@ class _RegisterPageState extends State<RegisterPage> {
       });
 
       // 4) (Optional but recommended) send email verification
-      await user.sendEmailVerification();
 
       // 5) Move to the verify email screen
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const VerifyEmailPage()),
-      );
+      Navigator.pushNamedAndRemoveUntil(context, '/verify', (r) => false);
     } catch (e) {
       _showError("Account creation failed: ${e.toString()}");
     }
@@ -154,8 +146,11 @@ class _RegisterPageState extends State<RegisterPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Stack(fit: StackFit.expand, children: [
+    return WillPopScope(
+        onWillPop: () async => await Navigator.maybePop(context),
+    child: Scaffold(
+
+    body: Stack(fit: StackFit.expand, children: [
         // background blur
         Image.asset("assets/background/fade_base.jpg", fit: BoxFit.cover),
         BackdropFilter(
@@ -201,11 +196,10 @@ class _RegisterPageState extends State<RegisterPage> {
                             ),
                           ),
                           child: Text(
-                            currentStep == 0
-                                ? (isCodeSent ? "Verify Code" : "Send Code")
-                                : (currentStep < 3
-                                ? "Save & Continue"
-                                : "Create Account"),
+                            currentStep==0
+                                ? (isCodeSent ? (resend>0 ? "Verify Code" : "Resend Code") : "Send Code")
+                                : (currentStep<3 ? "Save & Continue" : "Create Account"),
+
                             style: const TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
@@ -237,6 +231,7 @@ class _RegisterPageState extends State<RegisterPage> {
           ),
         ),
       ]),
+    ),
     );
   }
 
@@ -251,10 +246,7 @@ class _RegisterPageState extends State<RegisterPage> {
 
             // Top back arrow in a circle + “Back to Home” text
             GestureDetector(
-              onTap: () => Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (_) => const MainPage()),
-              ),
+              onTap: () => Navigator.maybePop(context),
               child: Column(
                 children: [
                   Container(
@@ -268,7 +260,7 @@ class _RegisterPageState extends State<RegisterPage> {
                   ),
                   const SizedBox(height: 6),
                   const Text(
-                    "start",
+                    "back",
                     style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -297,8 +289,10 @@ class _RegisterPageState extends State<RegisterPage> {
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: _input(
                 controller: phoneController,
-                hint: "(+357 99888777)",
+                hint: "e.g. (+357) 99XXXXXX",
+
                 keyboardType: TextInputType.phone,
+
               ),
             ),
 
@@ -327,6 +321,8 @@ class _RegisterPageState extends State<RegisterPage> {
                 onTap: prevStep,
               ),
             ),
+
+
             const SizedBox(height: 40),
             // Step Title
             const Center(
@@ -341,7 +337,7 @@ class _RegisterPageState extends State<RegisterPage> {
             ),
             const SizedBox(height: 24),
 
-            _formLabel("First Name"),
+            _formLabel("Customer Name"),
             _input(controller: nameController, hint: "Enter name"),
             const SizedBox(height: 20),
 
@@ -485,6 +481,7 @@ class _RegisterPageState extends State<RegisterPage> {
         ),
         decoration: InputDecoration(
           hintText: hint,
+          hintStyle: const TextStyle(color: Colors.grey),
           filled: true,
           fillColor: Colors.white.withOpacity(0.9),
           contentPadding:
@@ -561,7 +558,7 @@ class _RegisterPageState extends State<RegisterPage> {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 20),
+        margin: const EdgeInsets.fromLTRB(20, 12, 20, 0),
         padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 24),
         decoration: BoxDecoration(
           color: Colors.white24,

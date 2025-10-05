@@ -376,7 +376,7 @@ class _ActiveOrdersPageState extends State<ActiveOrdersPage> {
                               _circleBtn(
                                 icon: Icons.chat_bubble_outline,
                                 color: Colors.blueGrey,
-                                onTap: () async {
+                                onTap: () {
                                   final orderId = order['id'] as String;
                                   final customerId = (order['userId'] ?? '').toString();
                                   if (customerId.isEmpty) {
@@ -385,13 +385,6 @@ class _ActiveOrdersPageState extends State<ActiveOrdersPage> {
                                     );
                                     return;
                                   }
-                                  await ChatService.instance.ensureChat(
-                                    orderId: orderId,
-                                    customerId: customerId,
-                                    adminId: 'ADMIN', // replace with your admin uid if you have one
-                                    status: 'active',
-                                  );
-                                  if (!mounted) return;
                                   Navigator.push(
                                     context,
                                     MaterialPageRoute(
@@ -403,6 +396,7 @@ class _ActiveOrdersPageState extends State<ActiveOrdersPage> {
                                     ),
                                   );
                                 },
+
                               ),
                             ],
                           ),

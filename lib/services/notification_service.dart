@@ -3,6 +3,9 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+
 
 class NotificationService {
   static final FirebaseMessaging _messaging = FirebaseMessaging.instance;
@@ -88,6 +91,7 @@ class NotificationService {
       // Save token to preferences for backend registration
       if (token != null) {
         await _saveTokenToPreferences(token);
+        await _registerTokenWithBackend(token); // <-- add this
       } else {
         print('Warning: FCM token is null. This might affect push notifications.');
       }
@@ -96,6 +100,8 @@ class NotificationService {
       _messaging.onTokenRefresh.listen((newToken) {
         print('FCM Token refreshed: $newToken');
         _saveTokenToPreferences(newToken);
+        _registerTokenWithBackend(newToken);    // <-- add this
+
       });
     } catch (e) {
       print('Error configuring FCM: $e');
@@ -371,4 +377,14 @@ class NotificationService {
       },
     );
   }
+
+  static Future<void> _registerTokenWithBackend(String token) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    await FirebaseFirestore.instance.collection('users').doc(uid).set({
+      'fcmTokens': { token: true },
+    }, SetOptions(merge: true));
+  }
+
+
 }

@@ -6,148 +6,90 @@ import '../screens/pick_location_page.dart';
 
 class AddressDropdown extends StatefulWidget {
   const AddressDropdown({super.key});
-
   @override
   State<AddressDropdown> createState() => _AddressDropdownState();
 }
 
 class _AddressDropdownState extends State<AddressDropdown> {
-  String? selectedAddress;
-  List<String> addresses = [];
   final LayerLink _layerLink = LayerLink();
-  OverlayEntry? dropdownOverlay;
+  OverlayEntry? _overlay;
 
-  @override
-  void initState() {
-    super.initState();
-    _loadAddresses();
-  }
+  CollectionReference<Map<String, dynamic>> _col(String uid) =>
+      FirebaseFirestore.instance.collection('users').doc(uid).collection('addresses');
 
-  Future<void> _loadAddresses() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-
-    final snapshot = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .collection('addresses')
-        .orderBy('timestamp', descending: true)
-        .get();
-
-    setState(() {
-      addresses = snapshot.docs.map((doc) => doc['label'] as String).toList();
-      selectedAddress = addresses.firstWhere(
-            (label) => snapshot.docs
-            .firstWhere((doc) => doc['label'] == label)['isDefault'] == true,
-        orElse: () => addresses.isNotEmpty ? addresses.first : '',
-      );
-    });
-  }
-
-  void toggleDropdown() {
-    if (dropdownOverlay == null) {
-      _showDropdown();
-    } else {
-      _removeDropdown();
+  Future<void> _setDefault(String id) async {
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+    final ref = _col(uid);
+    final batch = FirebaseFirestore.instance.batch();
+    final all = await ref.get();
+    for (final d in all.docs) {
+      batch.update(d.reference, {'isDefault': d.id == id});
     }
+    await batch.commit();
   }
 
-  void _showDropdown() {
-    final overlay = Overlay.of(context);
-    final RenderBox renderBox = context.findRenderObject() as RenderBox;
-    final Offset offset = renderBox.localToGlobal(Offset.zero);
-    final Size size = renderBox.size;
+  Future<void> _addAddressFlow() async {
+    final label = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const PickLocationPage()),
+    );
+    if (label is! String || label.trim().isEmpty) return;
 
-    final appBarBottom = Scaffold.of(context).appBarMaxHeight!;
-    final bottomNavTop = MediaQuery.of(context).size.height - kBottomNavigationBarHeight;
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+    final ref = _col(uid);
+    final hasDefault = (await ref.where('isDefault', isEqualTo: true).limit(1).get()).docs.isNotEmpty;
 
-    dropdownOverlay = OverlayEntry(
-      builder: (context) => Stack(
+    final doc = await ref.add({
+      'label': label.trim(),
+      'isDefault': !hasDefault,
+      'timestamp': FieldValue.serverTimestamp(),
+    });
+
+    if (!hasDefault) await _setDefault(doc.id);
+  }
+
+  void _toggle() => _overlay == null ? _show() : _remove();
+
+  void _show() {
+    if (_overlay != null) return;
+    final box = context.findRenderObject() as RenderBox;
+    final width = box.size.width.clamp(220.0, 340.0);
+
+    _overlay = OverlayEntry(
+      builder: (_) => Stack(
         children: [
-          Positioned(
-            top: appBarBottom,
-            left: 0,
-            right: 0,
-            bottom: MediaQuery.of(context).size.height - bottomNavTop,
+          // Tap outside to close with soft blur
+          Positioned.fill(
             child: GestureDetector(
-              onTap: _removeDropdown,
+              onTap: _remove,
               child: BackdropFilter(
                 filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                child: Container(color: Colors.black.withOpacity(0.1)),
+                child: Container(color: Colors.black.withOpacity(0.08)),
               ),
             ),
           ),
-          Positioned(
-            top: offset.dy + size.height + 6,
-            left: offset.dx,
-            width: size.width,
+
+          // Anchor the panel to the field
+          CompositedTransformFollower(
+            link: _layerLink,
+            showWhenUnlinked: false,
+            offset: Offset(0, box.size.height + 6),
             child: Material(
               color: Colors.transparent,
               child: Container(
-                padding: const EdgeInsets.all(16),
+                width: width,
+                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(15),
+                  color: const Color(0xFFF4F6FA),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.white.withOpacity(0.6)),
                   boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      blurRadius: 12,
-                      offset: const Offset(0, 6),
-                    ),
+                    BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 14, offset: const Offset(0, 8)),
                   ],
                 ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    for (var address in addresses) ...[
-                      GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            selectedAddress = address;
-                          });
-                          _removeDropdown();
-                        },
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          child: Text(
-                            address,
-                            style: const TextStyle(
-                              fontSize: 14,
-                              color: Color(0xFF1A233D),
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                      ),
-                      if (address != addresses.last)
-                        const Divider(color: Colors.black26),
-                    ],
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: () {
-                          _removeDropdown();
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                                builder: (context) => const PickLocationPage()),
-                          );
-                        },
-                        icon: const Icon(Icons.add, size: 16),
-                        label: const Text("Add new Address"),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF0D2952),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+                child: _DropdownList(
+                  onPickNew: () async { _remove(); await _addAddressFlow(); },
+                  onClose: _remove, // <-- close overlay, never Navigator.pop
                 ),
               ),
             ),
@@ -156,55 +98,190 @@ class _AddressDropdownState extends State<AddressDropdown> {
       ),
     );
 
-    overlay.insert(dropdownOverlay!);
+    Overlay.of(context, rootOverlay: true).insert(_overlay!);
+    debugPrint('[AddressDropdown] overlay shown');
   }
 
-  void _removeDropdown() {
-    dropdownOverlay?.remove();
-    dropdownOverlay = null;
+  void _remove() {
+    _overlay?.remove();
+    _overlay = null;
+    debugPrint('[AddressDropdown] overlay removed');
+  }
+
+  @override
+  void dispose() {
+    _remove(); // avoid leaks
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    if (selectedAddress == null) return const SizedBox();
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return const SizedBox.shrink();
 
-    return CompositedTransformTarget(
-      link: _layerLink,
-      child: GestureDetector(
-        onTap: toggleDropdown,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.black12),
-            color: Colors.white,
-          ),
-          constraints: const BoxConstraints(maxWidth: 200),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.location_on,
-                  size: 18, color: Color(0xFF1A233D)),
-              const SizedBox(width: 6),
-              Flexible(
-                child: Text(
-                  selectedAddress!,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    color: Color(0xFF1A233D),
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 4),
-              const Icon(Icons.keyboard_arrow_down,
-                  size: 18, color: Color(0xFF1A233D)),
-            ],
-          ),
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: _col(user.uid)
+          .orderBy('isDefault', descending: true)
+          .orderBy('timestamp', descending: true)
+          .snapshots(),
+      builder: (_, snap) {
+        if (!snap.hasData) {
+          return _Shell(onTap: () {}, label: 'Loading...');
+        }
+        final docs = snap.data!.docs;
+        debugPrint('[AddressDropdown] docs=${docs.length}');
+        if (docs.isEmpty) {
+          return _Shell(
+            onTap: () async => _addAddressFlow(),
+            label: 'Add address',
+            showChevron: false,
+            leading: const Icon(Icons.add_location_alt_outlined, size: 18, color: Color(0xFF1A233D)),
+          );
+        }
+
+        // Find default (without firstWhere/orElse type mismatch)
+        QueryDocumentSnapshot<Map<String, dynamic>> defaultDoc = docs.first;
+        for (final d in docs) {
+          if ((d.data()['isDefault'] ?? false) == true) { defaultDoc = d; break; }
+        }
+        final defaultLabel = (defaultDoc.data()['label'] ?? '').toString();
+
+        return CompositedTransformTarget(
+          link: _layerLink,
+          child: _Shell(onTap: _toggle, label: defaultLabel),
+        );
+      },
+    );
+  }
+}
+
+class _Shell extends StatelessWidget {
+  final VoidCallback onTap;
+  final String label;
+  final bool showChevron;
+  final Widget? leading;
+  const _Shell({
+    required this.onTap,
+    required this.label,
+    this.showChevron = true,
+    this.leading,
+  });
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.9),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.black12),
         ),
+        constraints: const BoxConstraints(maxWidth: 280),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          leading ?? const Icon(Icons.location_on, size: 18, color: Color(0xFF1A233D)),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              label,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 14, color: Color(0xFF1A233D), fontWeight: FontWeight.w600),
+            ),
+          ),
+          if (showChevron) ...[
+            const SizedBox(width: 6),
+            const Icon(Icons.keyboard_arrow_down, size: 18, color: Color(0xFF1A233D)),
+          ],
+        ]),
       ),
     );
   }
 }
 
+class _DropdownList extends StatelessWidget {
+  final VoidCallback onPickNew;
+  final VoidCallback onClose; // <-- NEW
+  const _DropdownList({required this.onPickNew, required this.onClose});
+
+  CollectionReference<Map<String, dynamic>> _col(String uid) =>
+      FirebaseFirestore.instance.collection('users').doc(uid).collection('addresses');
+
+  Future<void> _setDefault(String id) async {
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+    final ref = _col(uid);
+    final batch = FirebaseFirestore.instance.batch();
+    final all = await ref.get();
+    for (final d in all.docs) {
+      batch.update(d.reference, {'isDefault': d.id == id});
+    }
+    await batch.commit();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: _col(uid)
+          .orderBy('isDefault', descending: true)
+          .orderBy('timestamp', descending: true)
+          .snapshots(),
+      builder: (_, snap) {
+        final docs = snap.data?.docs ?? [];
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (int i = 0; i < docs.length; i++) ...[
+              InkWell(
+                onTap: () async {
+                  await _setDefault(docs[i].id);
+                  onClose(); // <-- close overlay (no Navigator.pop)
+                },
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  child: Row(children: [
+                    Icon(
+                      (docs[i].data()['isDefault'] ?? false)
+                          ? Icons.star
+                          : Icons.location_on_outlined,
+                      size: 18,
+                      color: const Color(0xFF1A233D),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        (docs[i].data()['label'] ?? '').toString(),
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Color(0xFF1A233D),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ]),
+                ),
+              ),
+              if (i != docs.length - 1) const Divider(height: 12, color: Colors.black26),
+            ],
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: onPickNew,
+                icon: const Icon(Icons.add, size: 16),
+                label: const Text('Add new address'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF0D2952),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}

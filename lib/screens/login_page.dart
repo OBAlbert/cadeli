@@ -47,10 +47,7 @@ class _LoginPageState extends State<LoginPage> {
           MaterialPageRoute(builder: (_) => const VerifyEmailPage()),
         );
       } else {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const MainPage()),
-        );
+        Navigator.pushNamedAndRemoveUntil(context, '/auth', (r) => false);
       }
     } else {
       _showError("Invalid login. Please try again.");
@@ -64,10 +61,7 @@ class _LoginPageState extends State<LoginPage> {
     setState(() => _isLoading = false);
 
     if (user != null) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const MainPage()),
-      );
+      Navigator.pushNamedAndRemoveUntil(context, '/auth', (r) => false);
     } else {
       _showError("Google Sign-In failed.");
     }
@@ -82,10 +76,8 @@ class _LoginPageState extends State<LoginPage> {
       phoneNumber: phone,
       verificationCompleted: (PhoneAuthCredential credential) async {
         await FirebaseAuth.instance.signInWithCredential(credential);
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const MainPage()),
-        );
+        Navigator.pushNamedAndRemoveUntil(context, '/auth', (r) => false);
+
       },
       verificationFailed: (e) => _showError('Verification failed: ${e.message}'),
       codeSent: (String id, int? token) {
@@ -108,10 +100,8 @@ class _LoginPageState extends State<LoginPage> {
         smsCode: code,
       );
       await FirebaseAuth.instance.signInWithCredential(credential);
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const MainPage()),
-      );
+      Navigator.pushNamedAndRemoveUntil(context, '/auth', (r) => false);
+
     } catch (_) {
       _showError("Invalid code.");
     }

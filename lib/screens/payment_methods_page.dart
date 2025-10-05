@@ -1,7 +1,7 @@
 import 'dart:ui';
-import 'package:cadeli/screens/payment_service.dart';
-import 'package:flutter/material.dart';
+import 'package:cadeli/screens/payment_prefs.dart';
 import '../models/payment_method.dart';
+import 'package:flutter/material.dart';
 import 'add_payment_method_page.dart';
 
 class PaymentMethodsPage extends StatefulWidget {
@@ -21,14 +21,14 @@ class _PaymentMethodsPageState extends State<PaymentMethodsPage> {
   }
 
   Future<void> loadMethod() async {
-    final method = await PaymentService.getSelectedPaymentMethod();
+    final method = await PaymentPrefs.getSelectedPaymentMethod();
     setState(() {
       selectedMethod = method;
     });
   }
 
   void selectMethod(PaymentMethod method) async {
-    await PaymentService.saveSelectedPaymentMethod(method);
+    await PaymentPrefs.saveSelectedPaymentMethod(method);
     setState(() {
       selectedMethod = method;
     });

@@ -2,7 +2,6 @@
 import 'package:flutter/material.dart';
 import '../models/product.dart';
 import '../services/woocommerce_service.dart';
-import '../widget/app_scaffold.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -154,37 +153,25 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
 
   @override
   Widget build(BuildContext context) {
+    // keep your debug print if you like
     print('🖼️ Brand Image URL: $brandImageUrl');
 
-    return AppScaffold(
-      currentIndex: 1,
-      onTabSelected: (index) {},
-      child: SingleChildScrollView(
+    return Scaffold(
+      backgroundColor: Colors.grey[50],
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        // this gives you a working back arrow that pops to the previous page
+        foregroundColor: Colors.black,
+        title: const Text('Product', style: TextStyle(color: Colors.black)),
+      ),
+      body: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ⬅️ Back button
-            InkWell(
-              onTap: () => Navigator.of(context).pop(),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: const [
-                  Icon(Icons.arrow_back, color: Colors.black, size: 22),
-                  SizedBox(width: 6),
-                  Text(
-                    "Back",
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12), // small spacing after back button
-
+            // 🔻 NOTE: we REMOVED your manual "Back" InkWell here,
+            // because the AppBar already gives you a reliable back button.
 
             // 🖼️ Product image
             Container(
@@ -211,18 +198,16 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                       child: _thumb(
                         widget.product.imageUrl.isNotEmpty
                             ? widget.product.imageUrl
-                            : 'assets/background/fade_base.jpg', // keep or change to your fallback
+                            : 'assets/background/fade_base.jpg',
                       ),
                     ),
 
-                    // SALE badge
                     if (widget.product.onSale)
                       Positioned(
                         top: 8,
                         left: 8,
                         child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 4),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
                             color: Colors.redAccent,
                             borderRadius: BorderRadius.circular(12),
@@ -238,7 +223,6 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                         ),
                       ),
 
-                    // ❤️ Favourite toggle (top-right over image)
                     Positioned(
                       top: 8,
                       right: 8,
@@ -262,7 +246,6 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                         ),
                       ),
                     ),
-
                   ],
                 ),
               ),
@@ -317,7 +300,6 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
 
             const SizedBox(height: 24),
 
-
             // ℹ️ Section Title
             const Text(
               'Information',
@@ -328,14 +310,15 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
               ),
             ),
             const SizedBox(height: 12),
-            // 🔢 Attributes Grid (slightly shorter tiles)
+
+            // 🔢 Attributes Grid
             GridView.count(
               crossAxisCount: 3,
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              mainAxisSpacing: 6,     // was 1 → a bit more breathing room inside rows
-              crossAxisSpacing: 6,    // was 1
-              childAspectRatio: 1.15, // >1 makes each tile a bit shorter (brings Quantity closer)
+              mainAxisSpacing: 6,
+              crossAxisSpacing: 6,
+              childAspectRatio: 1.15,
               children: [
                 _buildAttributeCell(
                   imagePath: brandImageUrl.isNotEmpty ? brandImageUrl : 'assets/icons/paypal.png',
@@ -384,8 +367,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
               ],
             ),
 
-
-            // 🔢 Quantity (centered, bigger, bold, dark blue)
+            // 🔢 Quantity
             Center(
               child: Column(
                 children: [
@@ -394,7 +376,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
-                      color: Color(0xFF1A2D3D), // dark blue
+                      color: Color(0xFF1A2D3D),
                     ),
                   ),
                   const SizedBox(height: 10),
@@ -430,8 +412,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                             ),
                           ),
                         ),
-                        IconButton
-                          (
+                        IconButton(
                           onPressed: () => setState(() { qty++; }),
                           icon: const Icon(Icons.add_rounded),
                           iconSize: 24,
@@ -446,7 +427,6 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
               ),
             ),
             const SizedBox(height: 16),
-
 
             // 🛒 Add to Cart
             const SizedBox(height: 8),
@@ -480,10 +460,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
             ),
             const SizedBox(height: 20),
 
-
-
-
-            // 📄 Description placeholder
+            // 📄 Description
             const Text(
               'Description',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
@@ -500,6 +477,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       ),
     );
   }
+
 
   // 🧱 Attribute card builder
   Widget _buildAttributeCell({

@@ -394,7 +394,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 icon: const Icon(Icons.logout, color: Colors.grey),
                 onPressed: () async {
                   await FirebaseAuth.instance.signOut();
-                  Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginPage()));
+                  Navigator.of(context).pushNamedAndRemoveUntil('/login', (_) => false);
                 },
               ),
             ),

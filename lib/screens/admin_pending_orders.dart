@@ -175,34 +175,22 @@ class _PendingOrdersPageState extends State<PendingOrdersPage> {
     final String docId = order['id'];
 
     try {
-      // 1) Accept + (maybe) capture
-      final isCOD = (order['paymentMethod'] as String?) == 'cod';
-      if (isCOD) {
-        // COD: just accept; payment stays unpaid
-        await FirebaseFunctions.instance
-            .httpsCallable('adminAcceptOrder')
-            .call({'orderId': wooOrderId, 'docId': docId});
-      } else {
-        // Card: capture the auth now
-        await FirebaseFunctions.instance
-            .httpsCallable('captureWooPayment')
-            .call({'orderId': wooOrderId, 'docId': docId});
-      }
+      await FirebaseFunctions.instance
+          .httpsCallable('adminAcceptOrder')
+          .call({'orderId': wooOrderId, 'docId': docId});
 
-      // 2) (Optional) Optimistic UI: mark active – webhook will set paymentStatus
       await FirebaseFirestore.instance.collection('orders').doc(docId).update({
         'status': 'active',
         'updatedAt': FieldValue.serverTimestamp(),
         'timeline': FieldValue.arrayUnion([
           {
-            'at'  : DateTime.now().toUtc().toIso8601String(),
+            'at': DateTime.now().toUtc().toIso8601String(),
             'type': 'admin_accepted',
-            'note': 'Order accepted by admin (Stripe capture will reflect via webhook if card).'
+            'note': 'Order accepted by admin (Stripe capture handled server-side if card).'
           }
         ]),
       });
 
-      // 3) Notify user
       final userId = order['userId'] as String? ?? '';
       if (userId.isNotEmpty) {
         await FirebaseFirestore.instance
@@ -216,7 +204,10 @@ class _PendingOrdersPageState extends State<PendingOrdersPage> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Accepted. If card, capture will finalize via webhook.'), backgroundColor: Colors.green),
+          const SnackBar(
+            content: Text('Accepted. If card, payment was captured.'),
+            backgroundColor: Colors.green,
+          ),
         );
       }
     } catch (e) {
@@ -225,8 +216,7 @@ class _PendingOrdersPageState extends State<PendingOrdersPage> {
           SnackBar(content: Text('Failed to accept: $e'), backgroundColor: Colors.red),
         );
       }
-    }
- finally {
+    } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
@@ -239,24 +229,22 @@ class _PendingOrdersPageState extends State<PendingOrdersPage> {
     final String docId = order['id'];
 
     try {
-      // 1) Void/cancel auth on server via Cloud Function
-      final callable = FirebaseFunctions.instance.httpsCallable('voidWooPayment');
-      await callable.call({'orderId': wooOrderId, 'docId': docId}); // will throw on error
+      await FirebaseFunctions.instance
+          .httpsCallable('adminRejectOrder')
+          .call({'orderId': wooOrderId, 'docId': docId});
 
-      // 2) Update Firestore state + timeline
       await FirebaseFirestore.instance.collection('orders').doc(docId).update({
         'status': 'rejected',
-        'payment.auth': 'voided',
+        'paymentStatus': 'voided',
         'timeline': FieldValue.arrayUnion([
           {
-            'at'  : DateTime.now().toUtc().toIso8601String(),
+            'at': DateTime.now().toUtc().toIso8601String(),
             'type': 'admin_rejected',
             'note': 'Payment authorization voided, order rejected'
           }
         ]),
       });
 
-      // Push a chat message to the user
       final userId = order['userId'] as String? ?? '';
       if (userId.isNotEmpty) {
         await FirebaseFirestore.instance
@@ -267,6 +255,7 @@ class _PendingOrdersPageState extends State<PendingOrdersPage> {
           'timestamp': FieldValue.serverTimestamp(),
         });
       }
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Rejected: authorization voided'), backgroundColor: Colors.red),

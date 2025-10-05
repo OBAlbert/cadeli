@@ -155,65 +155,13 @@ class _IndexPageState extends State<IndexPage> {
 
             const SizedBox(height: 30),
 
-            // Login and Register buttons
-            // Padding(
-            //   padding: const EdgeInsets.symmetric(horizontal: 40),
-            //   child: Row(
-            //     children: [
-            //       Expanded(
-            //         child: ElevatedButton(
-            //           onPressed: () {
-            //             Navigator.push(
-            //               context,
-            //               MaterialPageRoute(builder: (_) => const LoginPage()),
-            //             );
-            //           },
-            //           style: ElevatedButton.styleFrom(
-            //             backgroundColor: Colors.blueAccent,
-            //             padding: const EdgeInsets.symmetric(vertical: 14),
-            //             shape: RoundedRectangleBorder(
-            //               borderRadius: BorderRadius.circular(30),
-            //             ),
-            //           ),
-            //           child: const Text("Login"),
-            //         ),
-            //       ),
-            //       const SizedBox(width: 16),
-            //       Expanded(
-            //         child: ElevatedButton(
-            //           onPressed: () {
-            //             Navigator.push(
-            //               context,
-            //               MaterialPageRoute(builder: (_) => const RegisterPage()),
-            //             );
-            //           },
-            //           style: ElevatedButton.styleFrom(
-            //             backgroundColor: Colors.white,
-            //             padding: const EdgeInsets.symmetric(vertical: 14),
-            //             shape: RoundedRectangleBorder(
-            //               borderRadius: BorderRadius.circular(30),
-            //             ),
-            //           ),
-            //           child: const Text(
-            //             "Register",
-            //             style: TextStyle(color: Colors.black87),
-            //           ),
-            //         ),
-            //       ),
-            //     ],
-            //   ),
-            // ), padding
-            // Login and Register buttons
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: Column(
                 children: [
                   ElevatedButton(
                     onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const RegisterPage()),
-                      );
+                      Navigator.pushNamed(context, '/register');
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.white,
@@ -234,10 +182,7 @@ class _IndexPageState extends State<IndexPage> {
                   const SizedBox(height: 12),
                   OutlinedButton(
                     onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const LoginPage()),
-                      );
+                      Navigator.pushNamed(context, '/login');
                     },
                     style: OutlinedButton.styleFrom(
                       side: const BorderSide(color: Colors.white),

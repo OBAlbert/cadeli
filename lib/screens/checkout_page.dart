@@ -1,21 +1,20 @@
 import 'dart:async';
-import 'dart:ui';
 import 'package:cadeli/screens/pick_location_page.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/cart_provider.dart';
-import '../models/payment_method.dart';
-import '../widget/app_scaffold.dart';
 import '../services/chat_service.dart';
+import '../widget/app_scaffold.dart';
 import 'chat_thread_page.dart';
 import 'main_page.dart';
 import '../services/woocommerce_service.dart';
 import '../services/payment_service.dart';
-import 'package:cadeli/screens/hosted_checkout_page.dart';
-
-
+import 'package:flutter_stripe/flutter_stripe.dart';
+import '../models/payment_method.dart' as apppay;
+import 'dart:io';
 
 
 class CheckoutPage extends StatefulWidget {
@@ -72,7 +71,10 @@ class _CheckoutPageState extends State<CheckoutPage> with SingleTickerProviderSt
         .orderBy('timestamp', descending: true)
         .get();
 
-    final addresses = snapshot.docs.map((doc) => doc.data()).toList();
+    final addresses = snapshot.docs
+        .map((doc) => {'id': doc.id, ...doc.data()})
+        .toList();
+
 
     if (!mounted) return;
     setState(() {
@@ -101,7 +103,6 @@ class _CheckoutPageState extends State<CheckoutPage> with SingleTickerProviderSt
     }
 
     try {
-      // 🔐 fresh token
       await user.getIdToken(true);
 
       // 🛒 cart → [{id, quantity}]
@@ -136,15 +137,17 @@ class _CheckoutPageState extends State<CheckoutPage> with SingleTickerProviderSt
         return double.tryParse(v.toString());
       }
 
-
-      // ✅ robust lat/lng extractor without nested ternaries
+      // ✅ robust lat/lng extractor
       double? lat, lng;
       final addr = selectedAddress ?? {};
 
       if (addr['geo'] is GeoPoint) {
         final g = addr['geo'] as GeoPoint;
-        lat = g.latitude;
-        lng = g.longitude;
+        lat = g.latitude; lng = g.longitude;
+      }
+      if ((lat == null || lng == null) && addr['location'] is GeoPoint) {
+        final g = addr['location'] as GeoPoint;
+        lat = g.latitude; lng = g.longitude;
       }
 
       lat ??= _toDouble(addr['lat'] ?? addr['latitude']);
@@ -162,8 +165,7 @@ class _CheckoutPageState extends State<CheckoutPage> with SingleTickerProviderSt
         lng ??= _toDouble(coords['lng']);
       }
 
-
-// 🔎 If still missing, try to backfill from the user's saved address doc
+      // 🔎 backfill from saved address if needed
       try {
         final addrId = addr['id'] ?? addr['addressId'];
         if ((lat == null || lng == null) && addrId != null) {
@@ -177,8 +179,11 @@ class _CheckoutPageState extends State<CheckoutPage> with SingleTickerProviderSt
           if (a != null) {
             if (a['geo'] is GeoPoint) {
               final g = a['geo'] as GeoPoint;
-              lat ??= g.latitude;
-              lng ??= g.longitude;
+              lat ??= g.latitude; lng ??= g.longitude;
+            }
+            if (a['location'] is GeoPoint) {
+              final g = a['location'] as GeoPoint;
+              lat ??= g.latitude; lng ??= g.longitude;
             }
             lat ??= _toDouble(a['lat'] ?? a['latitude']);
             lng ??= _toDouble(a['lng'] ?? a['longitude']);
@@ -188,8 +193,6 @@ class _CheckoutPageState extends State<CheckoutPage> with SingleTickerProviderSt
         debugPrint('Could not backfill lat/lng from saved address: $e');
       }
 
-      debugPrint('🧭 selectedAddress=$selectedAddress => lat=$lat lng=$lng');
-
       if (lat == null || lng == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Please pick your exact location on the map.')),
@@ -198,14 +201,12 @@ class _CheckoutPageState extends State<CheckoutPage> with SingleTickerProviderSt
         return;
       }
 
-
-
-      // 🏷️ split first/last for Woo (Woo requires standard keys)
+      // 🏷️ split first/last
       final parts = fullName.split(' ').where((s) => s.trim().isNotEmpty).toList();
       final firstName = parts.isNotEmpty ? parts.first : 'Customer';
       final lastName = parts.length > 1 ? parts.sublist(1).join(' ') : '';
 
-      // 🏠 address for Woo (standard keys)
+      // 🏠 Woo-style address
       final wooAddress = {
         'first_name': firstName,
         'last_name' : lastName,
@@ -216,7 +217,6 @@ class _CheckoutPageState extends State<CheckoutPage> with SingleTickerProviderSt
         'phone'    : selectedAddress?['phone'] ?? '',
       };
 
-      // 📝 your preferred meta naming (only subscription has time_slot)
       final meta = <String, dynamic>{
         'customer_name'      : fullName.isNotEmpty ? fullName : firstName,
         'address_line'       : wooAddress['address_1'],
@@ -227,18 +227,10 @@ class _CheckoutPageState extends State<CheckoutPage> with SingleTickerProviderSt
         'time_slot'          : isSubscription ? selectedTimeSlot : null,
         'frequency'          : isSubscription ? selectedFrequency : null,
         'preferred_day'      : isSubscription ? selectedDay : null,
-        'order_placed_at_ms' : DateTime.now().millisecondsSinceEpoch, // client stamp (server will also store)
+        'order_placed_at_ms' : DateTime.now().millisecondsSinceEpoch,
         'location_lat'       : lat,
         'location_lng'       : lng,
-
-
       }..removeWhere((k, v) => v == null);
-
-      // 💳 method
-      final methodSlug = _selectedMethod == 'card' ? 'stripe' : 'cod';
-
-      final traceId = 'client-${DateTime.now().millisecondsSinceEpoch}-${user.uid.substring(0,6)}';
-      debugPrint('🧾 TRACE $traceId starting order. items=${items.length}');
 
       // ✅ basic validations
       if (_selectedMethod != 'card' && _selectedMethod != 'cod') {
@@ -259,7 +251,6 @@ class _CheckoutPageState extends State<CheckoutPage> with SingleTickerProviderSt
         }
       }
 
-
       if (((wooAddress['address_1'] ?? '').toString().trim()).isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Please add your street address.')),
@@ -268,102 +259,113 @@ class _CheckoutPageState extends State<CheckoutPage> with SingleTickerProviderSt
         return;
       }
 
-
-
-      // 🔁 call server
-      debugPrint('Placing order with lat=$lat lng=$lng meta=$meta');
-      final result = await _payment.createWooOrderAuthorized(
-        userId: user.uid,
-        cartItems: items,
-        address: wooAddress,   // <-- send Woo-standard keys
-        paymentMethodSlug: methodSlug,
-        meta: meta,            // <-- send your custom/meta keys here
-      );
-
-// 💬 ensure chat thread for THIS order (docId == orderId)
-      final orderId = result.docId; // 👈 from your server result
-      final customerUid = user.uid;
-
-      await FirebaseFirestore.instance
-          .collection('chats')
-          .doc(orderId) // chatId == orderId
-          .set({
-        'chatId': orderId,
-        'orderId': orderId,
-        'customerId': customerUid,   // 👈 REQUIRED by rules
-        'adminId': 'ADMIN',          // replace with real admin uid later
-        'status': 'pending',
-        'createdAt': FieldValue.serverTimestamp(),
-        'lastMessage': 'Order placed. Waiting for admin approval.',
-        'lastSenderId': 'system',
-      }, SetOptions(merge: true));
-
-
-// (Optional) first system message
-      await FirebaseFirestore.instance
-          .collection('chats')
-          .doc(orderId)
-          .collection('messages')
-          .add({
-        'senderId': 'system',
-        'text': 'Order placed. Waiting for admin approval.',
-        'type': 'system',
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-
-
+      // ===================== FLOW =====================
       if (_selectedMethod == 'card') {
-        // 🌐 open hosted payment page
-        final success = await Navigator.of(context).push<bool>(
-          MaterialPageRoute(
-            builder: (_) => HostedCheckoutPage(
-              payUrl: result.payUrl.toString(),
-              orderDocId: result.docId,
-            ),
-          ),
+        // 1) Create Woo + Firestore order (unpaid, pending)
+        final created = await _payment.createWooOrderAuthorized(
+          userId: user.uid,
+          cartItems: items,
+          address: wooAddress,
+          paymentMethodSlug: 'stripe',
+          meta: meta,
+        );
+        final orderDocId = created.docId;
+
+        // 2) Create manual-capture PaymentIntent tied to that orderDocId
+        final sheet = await _payment.createStripePaymentSheet(
+          orderId: orderDocId,
+          mode: isSubscription ? 'subscription' : 'one_time',
         );
 
-        if (success == true) {
-          cart.clearCart();
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Payment successful!')),
-          );
-          Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(
-              builder: (_) => ChatThreadPage(
-                orderId: orderId,
-                customerId: customerUid,
-                isAdminView: false,
-              ),
-            ),
-                (route) => false,
-          );
+        final piSecret = sheet['paymentIntent'] as String?;
+        final ek       = sheet['ephemeralKey'] as String?;
+        final cust     = sheet['customer'] as String?;
 
-        } else {
+        if (piSecret == null || ek == null || cust == null) {
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Payment not completed.')),
+            const SnackBar(content: Text('Payment setup failed (missing keys).')),
           );
+          setState(() => _placing = false);
+          return;
         }
+
+        // 3) Show Stripe PaymentSheet (AUTH only)
+        try {
+          await Stripe.instance.initPaymentSheet(
+            paymentSheetParameters: SetupPaymentSheetParameters(
+              paymentIntentClientSecret: piSecret,
+              customerEphemeralKeySecret: ek,
+              customerId: cust,
+              merchantDisplayName: 'Cadeli',
+              applePay: Platform.isIOS
+                  ? const PaymentSheetApplePay(merchantCountryCode: 'CY')
+                  : null,
+              googlePay: Platform.isAndroid
+                  ? const PaymentSheetGooglePay(merchantCountryCode: 'CY', testEnv: true)
+                  : null,
+              style: ThemeMode.light,
+              allowsDelayedPaymentMethods: false,
+            ),
+          );
+          await Stripe.instance.presentPaymentSheet();
+        } on StripeException catch (e) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Card not authorized: ${e.error.localizedMessage ?? e.toString()}')),
+          );
+          setState(() => _placing = false);
+          return;
+        }
+
+
+        // If you DO have ChatService.instance.sendSystem, you can add:
+        // await ChatService.instance.sendSystem(orderDocId, 'Payment authorized. Waiting for admin approval.');
+
+        cart.clearCart();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Payment authorized. Awaiting approval.')),
+        );
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const MainPage(initialIndex: 2)),
+              (route) => false,
+        );
+        Future.microtask(() {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => ChatThreadPage(orderId: orderDocId, customerId: user.uid),
+            ),
+          );
+        });
+
       } else {
-        // 🧾 COD
+        // COD branch: server creates Woo+Firestore and posts first system message
+        final res = await _payment.placeCodOrderFromCart(
+          items: items,
+          address: wooAddress,
+          meta: meta,
+        );
+
+
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Order placed. Awaiting admin approval.')),
         );
         cart.clearCart();
         Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(
-            builder: (_) => ChatThreadPage(
-              orderId: orderId,
-              customerId: customerUid,
-              isAdminView: false,
-            ),
-          ),
+          MaterialPageRoute(builder: (_) => const MainPage(initialIndex: 2)),
               (route) => false,
         );
-
+        Future.microtask(() {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => ChatThreadPage(orderId: res.docId, customerId: user.uid),
+            ),
+          );
+        });
       }
+      // ===============================================
+
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Could not place order: $e')),
@@ -374,6 +376,11 @@ class _CheckoutPageState extends State<CheckoutPage> with SingleTickerProviderSt
   }
 
 
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
 
   @override
@@ -382,16 +389,16 @@ class _CheckoutPageState extends State<CheckoutPage> with SingleTickerProviderSt
     final cartItems = cartProvider.cartItems;
     final bool canPlace = cartItems.isNotEmpty && selectedAddress != null && _selectedMethod.isNotEmpty;
 
-    return AppScaffold(
-      currentIndex: 0,
-      hideNavigationBar: true,
-      onTabSelected: (index) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const MainPage()),
-        );
-        },
-      child: SafeArea(
-        child: LayoutBuilder(
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        foregroundColor: Colors.black,
+        title: const Text('Checkout', style: TextStyle(color: Colors.black)),
+        leading: BackButton(onPressed: () => Navigator.maybePop(context)),
+      ),
+      body: SafeArea(
+          child: LayoutBuilder(
           builder: (context, constraints) {
             return SingleChildScrollView(
               padding: const EdgeInsets.only(left: 20, right: 20, bottom: 30, top: 10),
@@ -399,18 +406,18 @@ class _CheckoutPageState extends State<CheckoutPage> with SingleTickerProviderSt
                 crossAxisAlignment: CrossAxisAlignment.start,
 
                 children: [
-                  const Padding(
-                    padding: EdgeInsets.fromLTRB(20, 2, 20, 10),
-                    child: Text(
-                      'Checkout',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF1A2D3D),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
+                  // const Padding(
+                  //   padding: EdgeInsets.fromLTRB(20, 2, 20, 10),
+                  //   child: Text(
+                  //     'Checkout',
+                  //     style: TextStyle(
+                  //       fontSize: 24,
+                  //       fontWeight: FontWeight.w800,
+                  //       color: Color(0xFF1A2D3D),
+                  //     ),
+                  //   ),
+                  // ),
+                  // const SizedBox(height: 14),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: GestureDetector(
@@ -546,20 +553,14 @@ class _CheckoutPageState extends State<CheckoutPage> with SingleTickerProviderSt
 
                     const SizedBox(height: 24),
                     const Text('FREQUENCY', style: _sectionTitle),
-                    const SizedBox(height: 24),
-                    const Text('FREQUENCY', style: _sectionTitle),
                     const SizedBox(height: 6),
-                    Wrap(
-                      spacing: 10,
-                      children: [
-                        ChoiceChip(
-                          label: const Text('Weekly'),
-                          selected: true,
-                          onSelected: (_) {},
-                          selectedColor: const Color(0xFF1A233D),
-                          labelStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
-                        ),
-                      ],
+                              // Weekly only – fixed, not interactive
+                    ChoiceChip(
+                      label: Text('Weekly', style: TextStyle(fontSize: 14)),
+                      selected: true,
+                      onSelected: null, // disables interaction
+                      selectedColor: Color(0xFF1A233D),
+                      labelStyle: TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
                     ),
                     const SizedBox(height: 24),
                     const Text('PREFERRED DAY', style: _sectionTitle),
@@ -571,31 +572,6 @@ class _CheckoutPageState extends State<CheckoutPage> with SingleTickerProviderSt
                   const Text('PAYMENT METHOD', style: _sectionTitle),
                   const SizedBox(height: 6),
 
-                  // const SizedBox(height: 8),
-                  // const Text(
-                  //   'Recently used',
-                  //   style: TextStyle(
-                  //     fontSize: 16,
-                  //     fontWeight: FontWeight.bold,
-                  //     color: Colors.black,
-                  //   ),
-                  // ),
-                  // const SizedBox(height: 12),
-                  // SizedBox(
-                  //   height: 110,
-                  //   child: ListView(
-                  //     scrollDirection: Axis.horizontal,
-                  //     children: [
-                  //       _buildPaymentCard(method: PaymentMethod(type: 'visa', last4: '4242', expiry: '12/26')),
-                  //       _buildPaymentCard(method: PaymentMethod(type: 'mastercard', last4: '7890', expiry: '08/25')),
-                  //       _buildAddPaymentCard(),
-                  //
-                  //     ],
-                  //   ),
-                  // ),
-                  // const SizedBox(height: 20),
-
-                  // Replace your current payment buttons with:
                   _buildPaymentButton(
                     icon: Icons.credit_card,
                     label: 'Pay with Card',
@@ -612,7 +588,7 @@ class _CheckoutPageState extends State<CheckoutPage> with SingleTickerProviderSt
                   const SizedBox(height: 24),
 
                   GestureDetector(
-                    onTap: canPlace ? _placeOrder : null,
+                    onTap: (canPlace && !_placing) ? _placeOrder : null,
                     child: Opacity(
                       opacity: canPlace ? 1 : 0.5,
                       child: Container(
@@ -814,7 +790,7 @@ class _CheckoutPageState extends State<CheckoutPage> with SingleTickerProviderSt
                 ),
 
                 leading: const Icon(Icons.location_on_outlined, color: Colors.black54),
-                trailing: (selectedAddress?['label'] == a['label'])
+                trailing: (selectedAddress?['id'] == a['id'])
                     ? const Icon(Icons.check_circle, color: Colors.green)
                     : null,
                 onTap: () {
@@ -868,7 +844,7 @@ class _CheckoutPageState extends State<CheckoutPage> with SingleTickerProviderSt
     );
   }
 
-  Widget _buildPaymentCard({required PaymentMethod method}) {
+  Widget _buildPaymentCard({required apppay.PaymentMethod method}) {
     String asset = 'visa.png';
     if (method.type == 'mastercard') asset = 'mastercard.png';
 

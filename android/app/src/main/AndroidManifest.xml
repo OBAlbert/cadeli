@@ -2,6 +2,8 @@
     xmlns:tools="http://schemas.android.com/tools"
     package="com.cadeli.waters">
 
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <application
         android:label="cadeli"
         android:name="${applicationName}"

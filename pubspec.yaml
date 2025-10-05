@@ -55,7 +55,7 @@ dependencies:
 
   
   # Payment Processing
-  flutter_stripe: ^9.4.0
+  flutter_stripe: ^9.6.0
   
   # Notifications
   firebase_messaging: ^14.7.10

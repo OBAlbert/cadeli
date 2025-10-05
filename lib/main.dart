@@ -1,46 +1,44 @@
-//import 'package:cadeli/screens/admin_page.dart';
-import 'package:cadeli/screens/products_page.dart';
-import 'package:cadeli/screens/register_page.dart';
-import 'package:cadeli/screens/test_brand_scroll.dart';
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:provider/provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter_stripe/flutter_stripe.dart';
 
 import 'firebase_options.dart';
 import 'models/cart_provider.dart';
-import 'screens/login_page.dart';
-import 'screens/main_page.dart';
-import 'screens/verify_email_page.dart';
-import 'screens/start_page.dart';
-import 'screens/index_page.dart';
-import 'screens/pick_location_page.dart';
 import 'services/notification_service.dart';
 
+// Screens
+import 'screens/start_page.dart';          // splash visual
+import 'screens/index_page.dart';          // public landing (Login / Register entry)
+import 'screens/login_page.dart';
+import 'screens/register_page.dart';
+import 'screens/verify_email_page.dart';
+import 'screens/main_page.dart';
+import 'screens/admin_main_page.dart';
+import 'screens/pick_location_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
   try {
     if (Firebase.apps.isEmpty) {
-      await Firebase.initializeApp(
-        options: DefaultFirebaseOptions.currentPlatform,
-      );
+      await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
     }
-  } catch (e) {
-    // Hot-reload duplicate init is fine — just log it and move on.
-    debugPrint('Firebase already initialized: $e');
-    // ❌ DO NOT touch FirebaseAuth.currentUser or getIdToken here.
-  }
-
+  } catch (_) {}
   await NotificationService.initialize();
+
+  // Stripe
+  Stripe.publishableKey = 'pk_test_51S6UmbI3V93NylQgC8WsOktl7aErCo55vNa9LIV95sCnwvCHoCD2PV1LBLjcUp0wQeJ4wvUJ5h0aZJUnZVVbPef4003m4GIw6g';
+  if (Platform.isIOS) Stripe.merchantIdentifier = 'merchant.com.cadeli';
+  await Stripe.instance.applySettings();
 
   runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
-
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
@@ -52,105 +50,96 @@ class MyApp extends StatelessWidget {
           scaffoldBackgroundColor: Colors.white,
           primaryColor: Colors.blueAccent,
         ),
-        //home: const StartRouter(),
-
-        home: const StartToIndexRouter(),
-
-        //home: const IndexPage(),
-
+        home: const SplashGate(), // always show splash first
         routes: {
-          '/map-picker': (context) => const PickLocationPage(),
-          '/login': (context) => const LoginPage(),
-          '/register': (context) => const RegisterPage(),
-          '/verify': (context) => const VerifyEmailPage(),
+          '/index'     : (_) => const IndexPage(),       // landing (not signed-in)
+          '/auth'      : (_) => const AuthGate(),        // decides AdminMain/Main
+          '/login'     : (_) => const LoginPage(),
+          '/register'  : (_) => const RegisterPage(),
+          '/verify'    : (_) => const VerifyEmailPage(),
+          '/home'      : (_) => const MainPage(),
+          '/adminHome' : (_) => const AdminMainPage(),
+          '/map-picker': (_) => const PickLocationPage(),
         },
       ),
     );
   }
-
 }
 
-class StartToIndexRouter extends StatefulWidget {
-  const StartToIndexRouter({super.key});
-
+/// Splash → after 1.5s route:
+/// - signed in? → /auth  (go straight to app)
+/// - not signed in? → /index (public landing)
+class SplashGate extends StatefulWidget {
+  const SplashGate({super.key});
   @override
-  State<StartToIndexRouter> createState() => _StartToIndexRouterState();
+  State<SplashGate> createState() => _SplashGateState();
 }
-
-class _StartToIndexRouterState extends State<StartToIndexRouter> {
+class _SplashGateState extends State<SplashGate> {
   @override
   void initState() {
     super.initState();
-    Future.delayed(const Duration(seconds: 2), () {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const IndexPage()),
-      );
+    Future.delayed(const Duration(milliseconds: 1500), () {
+      if (!mounted) return;
+      final user = FirebaseAuth.instance.currentUser;
+      Navigator.of(context).pushReplacementNamed(user == null ? '/index' : '/auth');
     });
   }
-
   @override
-  Widget build(BuildContext context) {
-    return const StartPage();
-  }
+  Widget build(BuildContext context) => const StartPage();
 }
 
-// REPLACE your old AuthGate class with this new one
+/// AuthGate: live auth → reload email → stream users/{uid}.isAdmin → route
 class AuthGate extends StatelessWidget {
   const AuthGate({super.key});
-
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<User?>(
-      // The key to solving the race condition
-      stream: FirebaseAuth.instance.authStateChanges(),
-      builder: (context, snapshot) {
-        // Show a loading screen while waiting for the initial auth check
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(
-            body: Center(
-              child: CircularProgressIndicator(),
-            ),
-          );
-        }
+      stream: FirebaseAuth.instance.authStateChanges(), // login/logout live
+      builder: (context, authSnap) {
+        if (authSnap.connectionState == ConnectionState.waiting) return const _Loading();
+        final user = authSnap.data;
 
-        // Now we have a definitive auth state
-        final User? user = snapshot.data;
+        // If user signs out while here, go back to Index
+        if (user == null) return const IndexPage();
 
-        if (user == null) {
-          return const LoginPage();
-        }
+        // Refresh email verification before routing
+        return FutureBuilder(
+          future: user.reload(),
+          builder: (context, reloadSnap) {
+            if (reloadSnap.connectionState == ConnectionState.waiting) return const _Loading();
+            final refreshed = FirebaseAuth.instance.currentUser!;
+            if (!refreshed.emailVerified) return const VerifyEmailPage();
 
-        if (!user.emailVerified) {
-          return const VerifyEmailPage();
-        }
-
-        return const MainPage();
+            // Live admin/customer
+            return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+              stream: FirebaseFirestore.instance.collection('users').doc(refreshed.uid).snapshots(),
+              builder: (context, userDocSnap) {
+                if (userDocSnap.connectionState == ConnectionState.waiting) return const _Loading();
+                final isAdmin = (userDocSnap.data?.data()?['isAdmin'] ?? false) == true;
+                return isAdmin ? const AdminMainPage() : const MainPage();
+              },
+            );
+          },
+        );
       },
     );
   }
 }
-class StartRouter extends StatefulWidget {
-  const StartRouter({super.key});
 
+class _Loading extends StatelessWidget {
+  const _Loading();
   @override
-  State<StartRouter> createState() => _StartRouterState();
+  Widget build(BuildContext context) =>
+      const Scaffold(body: Center(child: CircularProgressIndicator()));
 }
 
-class _StartRouterState extends State<StartRouter> {
-  @override
-  void initState() {
-    super.initState();
-    Future.delayed(const Duration(seconds: 2), () {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => AuthGate()),
-      );
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return const StartPage(); // Your splash screen
+/// Call this on any "Logout" button:
+/// await AuthNavigator.signOutToIndex(context);
+class AuthNavigator {
+  static Future<void> signOutToIndex(BuildContext context) async {
+    try { await FirebaseAuth.instance.signOut(); } catch (_) {}
+    if (context.mounted) {
+      Navigator.of(context).pushNamedAndRemoveUntil('/index', (r) => false);
+    }
   }
 }
-
-
