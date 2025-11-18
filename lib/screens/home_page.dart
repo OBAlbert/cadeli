@@ -7,6 +7,8 @@ import '../models/product.dart';
 import '../models/category.dart';
 import '../services/woocommerce_service.dart';
 
+const kCadeliBlue = Color(0xFF1A233D);
+
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -267,10 +269,19 @@ class _HomePageState extends State<HomePage> {
                 label: const Text('All'),
                 selected: selectedCategoryId == null,
                 onSelected: (_) => _filterByCategoryId(null),
-                selectedColor: Colors.blue.shade100,
-                backgroundColor: Colors.grey.shade200,
+                showCheckmark: false,
+                selectedColor: kCadeliBlue,                       // ✅ dark blue when selected
+                backgroundColor: Colors.white,                    // ✅ white when not
+                side: BorderSide(
+                  color: (selectedCategoryId == null)
+                      ? kCadeliBlue
+                      : Colors.grey.shade300,
+                ),
                 labelStyle: TextStyle(
-                  color: selectedCategoryId == null ? Colors.blue : Colors.black,
+                  color: (selectedCategoryId == null)
+                      ? Colors.white
+                      : Colors.black,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),
@@ -282,10 +293,13 @@ class _HomePageState extends State<HomePage> {
                   label: Text(c.name),
                   selected: isSelected,
                   onSelected: (_) => _filterByCategoryId(isSelected ? null : c.id),
-                  selectedColor: Colors.blue.shade100,
-                  backgroundColor: Colors.grey.shade200,
+                  showCheckmark: false,
+                  selectedColor: kCadeliBlue,
+                  backgroundColor: Colors.white,
+                  side: BorderSide(color: isSelected ? kCadeliBlue : Colors.grey.shade300),
                   labelStyle: TextStyle(
-                    color: isSelected ? Colors.blue : Colors.black,
+                    color: isSelected ? Colors.white : Colors.black,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               );

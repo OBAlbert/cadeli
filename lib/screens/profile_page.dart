@@ -3,7 +3,6 @@ import 'package:cadeli/screens/orders_page.dart';
 import 'package:cadeli/screens/addresses_page.dart';
 import 'package:cadeli/screens/favorites_page.dart';
 import 'package:cadeli/screens/product_detail_page.dart';
-import 'package:cadeli/screens/ratings_page.dart';
 import 'package:cadeli/screens/payment_methods_page.dart';
 import 'package:cadeli/screens/contact_page.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -12,6 +11,9 @@ import 'package:flutter/material.dart';
 import 'package:cadeli/models/product.dart';
 
 import '../services/woocommerce_service.dart';
+import 'Partners_page.dart';
+import 'about_page.dart';
+import 'allergies_page.dart';
 
 
 class ProfilePage extends StatefulWidget {
@@ -179,15 +181,42 @@ class _ProfilePageState extends State<ProfilePage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          "Favourites",
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-            color: Color(0xFF1A233D),
-          ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              "Favourites",
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+                color: Color(0xFF1A233D),
+              ),
+            ),
+            GestureDetector(
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const FavoritesPage()),
+              ),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE6F1FF), // light blue box
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text(
+                  "See More",
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF1A233D), // darker blue text
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 10),
+
         SizedBox(
           height: 160,
           child: StreamBuilder<QuerySnapshot>(
@@ -354,10 +383,12 @@ class _ProfilePageState extends State<ProfilePage> {
       children: [
         buildTile(Icons.shopping_basket, "Orders", () => Navigator.push(context, MaterialPageRoute(builder: (_) => const OrdersPage()))),
         buildTile(Icons.location_on, "Addresses", () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AddressesPage()))),
-        buildTile(Icons.favorite_border, "Favorites", () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FavoritesPage()))),
-        buildTile(Icons.star_border, "Ratings", () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RatingsPage()))),
+        buildTile(Icons.handshake_outlined, "Partners", () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PartnersPage()))),
         buildTile(Icons.payment, "Payment Methods", () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PaymentMethodsPage()))),
-        buildTile(Icons.info_outline, "About Cadeli"),
+        buildTile(Icons.info_outline, "About Cadeli", () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AboutPage()))),
+        buildTile(Icons.medical_information, "Allergies",
+                () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AllergiesPage()))),
+
         buildTile(Icons.contact_mail, "Contact", () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ContactPage()))),
       ],
     );

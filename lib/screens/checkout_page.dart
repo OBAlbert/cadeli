@@ -32,6 +32,8 @@ class _CheckoutPageState extends State<CheckoutPage> with SingleTickerProviderSt
   Map<String, dynamic>? selectedAddress;
   List<Map<String, dynamic>> addressList = [];
   final WooCommerceService wooService = WooCommerceService();
+  String? _selectedCardId;
+
 
   final _payment = PaymentService();
   bool _placing = false;
@@ -89,6 +91,91 @@ class _CheckoutPageState extends State<CheckoutPage> with SingleTickerProviderSt
     });
   }
 
+  Widget _showPaymentMethodPicker() {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _payment.listPaymentMethods(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final cards = snapshot.data!;
+        if (cards.isEmpty) {
+          return TextButton.icon(
+            onPressed: () async {
+              await _addNewCardFromCheckout();
+              setState(() {});
+            },
+            icon: const Icon(Icons.add, color: Color(0xFF0E1A36)),
+            label: const Text(
+              'Add Card',
+              style: TextStyle(
+                color: Color(0xFF0E1A36),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          );
+        }
+
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Color(0xFF0E1A36), width: 1.5),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 5,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              dropdownColor: Colors.white,
+              style: const TextStyle(
+                color: Color(0xFF0E1A36),
+                fontWeight: FontWeight.w600,
+              ),
+              hint: const Text(
+                'Select saved card',
+                style: TextStyle(color: Color(0xFF0E1A36)),
+              ),
+              value: _selectedCardId,
+              onChanged: (val) => setState(() => _selectedCardId = val),
+              items: cards.map((c) {
+                final id = c['id'] as String;
+                final brand = c['brand'];
+                final last4 = c['last4'];
+                return DropdownMenuItem(
+                  value: id,
+                  child: Text('$brand •••• $last4'),
+                );
+              }).toList(),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _addNewCardFromCheckout() async {
+    final setup = await _payment.createSetupIntent();
+    await Stripe.instance.initPaymentSheet(
+      paymentSheetParameters: SetupPaymentSheetParameters(
+        merchantDisplayName: 'Cadeli',
+        customerId: setup['customerId'],
+        setupIntentClientSecret: setup['clientSecret'],
+        style: ThemeMode.light,
+      ),
+    );
+    await Stripe.instance.presentPaymentSheet();
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Card added')));
+  }
+
+
   Future<void> _placeOrder() async {
     if (_placing) return;
     setState(() => _placing = true);
@@ -108,12 +195,19 @@ class _CheckoutPageState extends State<CheckoutPage> with SingleTickerProviderSt
       // 🛒 cart → [{id, quantity}]
       final cart = context.read<CartProvider>();
       final items = cart.cartItems.map<Map<String, dynamic>>((m) {
-        final prodId = m['product'] != null ? m['product'].id : m['id'];
+        final product = m['product'];
+        final prodId = product != null ? product.id : m['id'];
+
         return {
           'id': int.tryParse(prodId.toString()) ?? 0,
+          'name': product?.name ?? m['name'] ?? '',
+          'brand': product?.brand ?? '',
+          'imageUrl': product?.imageUrl ?? '',
+          'price': product?.price ?? 0.0,
           'quantity': (m['quantity'] ?? 1) as int,
         };
       }).toList();
+
 
       if (items.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -290,6 +384,24 @@ class _CheckoutPageState extends State<CheckoutPage> with SingleTickerProviderSt
           return;
         }
 
+        if (_selectedCardId != null && _selectedCardId!.isNotEmpty) {
+          await Stripe.instance.confirmPayment(
+            paymentIntentClientSecret: piSecret!,
+            data: PaymentMethodParams.cardFromMethodId(
+              paymentMethodData: PaymentMethodDataCardFromMethod(paymentMethodId: _selectedCardId!),
+            ),
+          );
+          cart.clearCart();
+          ScaffoldMessenger.of(context)
+              .showSnackBar(const SnackBar(content: Text('Payment authorized.')));
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => const MainPage(initialIndex: 2)),
+                (route) => false,
+          );
+          return; // skip the PaymentSheet since we used saved card
+        }
+
+
         // 3) Show Stripe PaymentSheet (AUTH only)
         try {
           await Stripe.instance.initPaymentSheet(
@@ -375,6 +487,109 @@ class _CheckoutPageState extends State<CheckoutPage> with SingleTickerProviderSt
     }
   }
 
+  void _showCardSelectionSheet() async {
+    final cards = await _payment.listPaymentMethods();
+
+    if (!mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      backgroundColor: Colors.white,
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Pay with Card',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                    color: Color(0xFF0E1A36),
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                if (cards.isNotEmpty)
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: Color(0xFF0E1A36), width: 1.5),
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        dropdownColor: Colors.white,
+                        value: _selectedCardId,
+                        hint: const Text(
+                          'Select saved card',
+                          style: TextStyle(color: Color(0xFF0E1A36)),
+                        ),
+                        onChanged: (val) {
+                          setState(() {
+                            _selectedCardId = val;
+                            _selectedMethod = 'card';
+                          });
+                          Navigator.pop(context);
+                        },
+                        items: cards.map((c) {
+                          final id = c['id'] as String;
+                          final brand = c['brand'];
+                          final last4 = c['last4'];
+                          return DropdownMenuItem(
+                            value: id,
+                            child: Text('$brand •••• $last4'),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  )
+                else
+                  const Padding(
+                    padding: EdgeInsets.all(8.0),
+                    child: Text('No saved cards yet.'),
+                  ),
+
+                const SizedBox(height: 18),
+                Center(
+                  child: ElevatedButton.icon(
+                    onPressed: () async {
+                      Navigator.pop(context);
+                      await _addNewCardFromCheckout();
+                      await _payment.listPaymentMethods(); // refresh saved cards
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Card added successfully.')),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF0E1A36),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 22),
+                    ),
+                    icon: const Icon(Icons.add),
+                    label: const Text('Add / Use New Card'),
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
 
   @override
   void dispose() {
@@ -394,9 +609,18 @@ class _CheckoutPageState extends State<CheckoutPage> with SingleTickerProviderSt
         backgroundColor: Colors.white,
         elevation: 0,
         foregroundColor: Colors.black,
-        title: const Text('Checkout', style: TextStyle(color: Colors.black)),
-        leading: BackButton(onPressed: () => Navigator.maybePop(context)),
+        title: const Text(
+          'Checkout',
+          style: TextStyle(
+            fontSize: 24,                // matches Cart
+            fontWeight: FontWeight.w800, // matches Cart
+            color: Color(0xFF1A2D3D),
+          ),
+        ),
+        leading: const SizedBox.shrink(),
       ),
+
+
       body: SafeArea(
           child: LayoutBuilder(
           builder: (context, constraints) {
@@ -406,67 +630,76 @@ class _CheckoutPageState extends State<CheckoutPage> with SingleTickerProviderSt
                 crossAxisAlignment: CrossAxisAlignment.start,
 
                 children: [
-                  // const Padding(
-                  //   padding: EdgeInsets.fromLTRB(20, 2, 20, 10),
-                  //   child: Text(
-                  //     'Checkout',
-                  //     style: TextStyle(
-                  //       fontSize: 24,
-                  //       fontWeight: FontWeight.w800,
-                  //       color: Color(0xFF1A2D3D),
-                  //     ),
-                  //   ),
-                  // ),
-                  // const SizedBox(height: 14),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: GestureDetector(
-                      onTap: () => Navigator.pop(context),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(40),
-                          border: Border.all(color: Colors.white.withOpacity(0.4)),
-                          boxShadow: const [
-                            BoxShadow(color: Colors.black26, blurRadius: 8, offset: Offset(0, 4)),
-                            BoxShadow(color: Colors.white30, offset: Offset(0, -2), blurRadius: 2),
-                          ],
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.arrow_back, size: 18, color: Colors.black),
-                            SizedBox(width: 6),
-                            Text('Back to Cart', style: TextStyle(color: Colors.black)),
-                          ],
-                        ),
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(40),
+                        border: Border.all(color: Colors.white.withOpacity(0.4)),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.arrow_back, size: 18, color: Colors.black),
+                          SizedBox(width: 6),
+                          Text('Cart', style: TextStyle(color: Colors.black, fontWeight: FontWeight.w600)),
+                        ],
                       ),
                     ),
                   ),
-                  const SizedBox(height: 20),
-                  Center(
-                    child: AnimatedBuilder(
-                      animation: _tabAnimation,
-                      builder: (_, __) => ToggleButtons(
+                  const SizedBox(height: 6),
+
+                  AnimatedBuilder(
+                    animation: _tabAnimation,
+                    builder: (_, __) => Container(
+                      height: 48,
+                      width: double.infinity,                               // full width within 20px page padding
+                      decoration: BoxDecoration(
+                        color: Colors.white,
                         borderRadius: BorderRadius.circular(30),
-                        borderColor: Colors.grey.shade300,
-                        selectedColor: Colors.white,
-                        fillColor: const Color(0xFF1A233D),
-                        color: Colors.black87,
-                        isSelected: [!isSubscription, isSubscription],
-                        onPressed: (index) {
-                          setState(() => isSubscription = index == 1);
-                          _controller.forward(from: 0);
-                        },
-                        children: const [
-                          Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                            child: Text('Normal Delivery'),
+                        border: Border.all(color: Colors.black, width: 1.2),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () { setState(() => isSubscription = false); _controller.forward(from: 0); },
+                              child: Container(
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  color: !isSubscription ? const Color(0xFF1A233D) : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(28),
+                                ),
+                                child: Text(
+                                  'Normal Delivery',
+                                  style: TextStyle(
+                                    color: !isSubscription ? Colors.white : Colors.black87,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ),
                           ),
-                          Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                            child: Text('Subscription'),
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () { setState(() => isSubscription = true); _controller.forward(from: 0); },
+                              child: Container(
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  color: isSubscription ? const Color(0xFF1A233D) : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(28),
+                                ),
+                                child: Text(
+                                  'Subscription',
+                                  style: TextStyle(
+                                    color: isSubscription ? Colors.white : Colors.black87,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ),
                           ),
                         ],
                       ),
@@ -507,8 +740,15 @@ class _CheckoutPageState extends State<CheckoutPage> with SingleTickerProviderSt
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(product.name, style: _boldDark),
-                                Text('${item['size']} / ${item['package']}', style: _secondaryStyle),
+                                // Show "size • package" only when each part exists; otherwise show whichever exists; never show a lone slash.
+                                if ((item['size']?.toString().isNotEmpty ?? false) && (item['package']?.toString().isNotEmpty ?? false))
+                                  Text('${item['size']} • ${item['package']}', style: _secondaryStyle)
+                                else if ((item['size']?.toString().isNotEmpty ?? false))
+                                  Text('${item['size']}', style: _secondaryStyle)
+                                else if ((item['package']?.toString().isNotEmpty ?? false))
+                                    Text('${item['package']}', style: _secondaryStyle),
                                 const SizedBox(height: 4),
+
                                 Text('€${price.toStringAsFixed(2)} × $quantity', style: _lightDetail),
                               ],
                             ),
@@ -523,23 +763,48 @@ class _CheckoutPageState extends State<CheckoutPage> with SingleTickerProviderSt
                   const Divider(thickness: 1, color: Colors.black26),
                   const SizedBox(height: 12),
 
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1A2D3D),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Text(
-                      'TOTAL: €${cartProvider.totalCost.toStringAsFixed(2)}',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
+// Mirror Cart totals: Price (without VAT), VAT, Total (incl. VAT)
+                  Builder(builder: (context) {
+                    final double priceWithoutVat = cartProvider.subtotal;
+                    const double vatRate = 0.19; // 19% CY
+                    final double vatAmount = priceWithoutVat * vatRate;
+                    final double grandTotal = priceWithoutVat + vatAmount;
+
+                    Widget _totalsRow(String label, double amount, {bool isBold = false, bool big = false}) {
+                      return Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            label,
+                            style: TextStyle(
+                              fontSize: big ? 18 : 14,
+                              fontWeight: isBold ? FontWeight.w800 : FontWeight.w600,
+                              color: const Color(0xFF1A2D3D),
+                            ),
+                          ),
+                          Text(
+                            '€${amount.toStringAsFixed(2)}',
+                            style: TextStyle(
+                              fontSize: big ? 18 : 14,
+                              fontWeight: isBold ? FontWeight.w800 : FontWeight.w700,
+                              color: const Color(0xFF1A2D3D),
+                            ),
+                          ),
+                        ],
+                      );
+                    }
+
+                    return Column(
+                      children: [
+                        _totalsRow('Price (without VAT)', priceWithoutVat),
+                        const SizedBox(height: 6),
+                        _totalsRow('VAT (19%)', vatAmount),
+                        const SizedBox(height: 10),
+                        _totalsRow('Total (incl. VAT)', grandTotal, isBold: true, big: true),
+                      ],
+                    );
+                  }),
+
 
 
 
@@ -570,20 +835,25 @@ class _CheckoutPageState extends State<CheckoutPage> with SingleTickerProviderSt
 
                   const SizedBox(height: 24),
                   const Text('PAYMENT METHOD', style: _sectionTitle),
+                  _showPaymentMethodPicker(),
+                  const SizedBox(height: 12),
+
                   const SizedBox(height: 6),
 
                   _buildPaymentButton(
-                    icon: Icons.credit_card,
+                    icon: Icons.credit_card_outlined,
                     label: 'Pay with Card',
                     isSelected: _selectedMethod == 'card',
-                    onTap: () => _handlePaymentMethodSelection('card'),
+                    onTap: _showCardSelectionSheet,
                   ),
+
                   _buildPaymentButton(
-                    icon: Icons.attach_money,
+                    icon: Icons.euro, // use Euro for cash to avoid the $ sign
                     label: 'Cash on Delivery',
                     isSelected: _selectedMethod == 'cod',
                     onTap: () => _handlePaymentMethodSelection('cod'),
                   ),
+
 
                   const SizedBox(height: 24),
 
@@ -597,21 +867,11 @@ class _CheckoutPageState extends State<CheckoutPage> with SingleTickerProviderSt
                         decoration: BoxDecoration(
                           color: const Color(0xFF1A2D3D),
                           borderRadius: BorderRadius.circular(30),
-                          boxShadow: const [
-                            BoxShadow(color: Colors.black38, offset: Offset(0, 8), blurRadius: 24),
-                          ],
                         ),
                         alignment: Alignment.center,
-                        child: const Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.payment, color: Colors.white),
-                            SizedBox(width: 10),
-                            Text(
-                              'Place Order',
-                              style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-                            ),
-                          ],
+                        child: const Text(
+                          'Place Order',
+                          style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
                         ),
                       ),
                     ),
@@ -645,8 +905,13 @@ class _CheckoutPageState extends State<CheckoutPage> with SingleTickerProviderSt
     color: Colors.white.withOpacity(0.3),
     borderRadius: BorderRadius.circular(16),
     border: Border.all(color: Colors.white.withOpacity(0.4)),
-    boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 8)],
+    boxShadow: const [
+      BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 4)),
+      BoxShadow(color: Colors.white24, blurRadius: 2, offset: Offset(0, -2)),
+    ],
   );
+
+
 
   Widget _buildAddressSelector() {
     return GestureDetector(
@@ -659,9 +924,11 @@ class _CheckoutPageState extends State<CheckoutPage> with SingleTickerProviderSt
           border: Border.all(color: Colors.white.withOpacity(0.4)),
           boxShadow: const [
             BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 4)),
-            BoxShadow(color: Colors.white24, offset: Offset(0, -2), blurRadius: 2),
+            BoxShadow(color: Colors.white24, blurRadius: 2, offset: Offset(0, -2)),
           ],
         ),
+
+
         child: Row(
           children: [
             const Icon(Icons.location_on, size: 20, color: Color(0xFF1A233D)),

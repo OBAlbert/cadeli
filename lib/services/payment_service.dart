@@ -39,14 +39,18 @@ class PaymentService {
     required String paymentMethodSlug, // 'stripe' or 'cod'
     Map<String, dynamic>? meta,
   }) async {
-    final items = cartItems.map((item) {
-      final prodId = item['product'] != null ? item['product'].id : item['id'];
-      final qty = (item['quantity'] as num?)?.toInt() ?? 1;
+    final items = cartItems.map((it) {
+      final prodId = it['id'] ?? it['product']?.id;
       return {
-        'id': int.tryParse(prodId.toString()) ?? 0,
-        'quantity': qty,
+        'id': prodId.toString(),
+        'name': it['name'] ?? it['product']?.name ?? '',
+        'brand': it['brand'] ?? it['product']?.brand ?? '',
+        'price': it['price'] ?? it['product']?.price ?? 0.0,
+        'imageUrl': it['imageUrl'] ?? it['product']?.imageUrl ?? '',
+        'quantity': (it['quantity'] as num?)?.toInt() ?? 1,
       };
     }).toList();
+
 
     final res = await _call('createWooOrderFromCart').call({
       'userId': userId,
@@ -91,10 +95,18 @@ class PaymentService {
     required Map<String, dynamic> address,
     required Map<String, dynamic> meta,
   }) async {
-    final shaped = items.map((it) => {
-      'id': int.tryParse((it['id'] ?? it['product']?.id).toString()) ?? 0,
-      'quantity': (it['quantity'] as num?)?.toInt() ?? 1,
+    final shaped = items.map((it) {
+      final prodId = it['id'] ?? it['product']?.id;
+      return {
+        'id': prodId.toString(),
+        'name': it['name'] ?? it['product']?.name ?? '',
+        'brand': it['brand'] ?? it['product']?.brand ?? '',
+        'price': it['price'] ?? it['product']?.price ?? 0.0,
+        'imageUrl': it['imageUrl'] ?? it['product']?.imageUrl ?? '',
+        'quantity': (it['quantity'] as num?)?.toInt() ?? 1,
+      };
     }).toList();
+
 
     final res = await _call('placeCodOrderFromCart').call({
       'cartItems': shaped,
@@ -118,4 +130,24 @@ class PaymentService {
     final res = await _call('debugWhoAmI').call();
     return Map<String, dynamic>.from(res.data as Map);
   }
+
+  Future<List<Map<String, dynamic>>> listPaymentMethods() async {
+    final res = await _call('listPaymentMethods').call();
+    final rawList = res.data as List;
+    return rawList
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+  }
+
+  Future<Map<String, dynamic>> createSetupIntent() async {
+    final res = await _call('addPaymentMethod').call();
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  Future<void> deletePaymentMethod(String id) async {
+    await _call('deletePaymentMethod').call({'id': id});
+  }
+
 }
+
+

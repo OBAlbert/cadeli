@@ -1,39 +1,93 @@
+import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import '../widget/app_scaffold.dart';
+import 'package:webview_flutter/webview_flutter.dart';
+import 'package:webview_flutter_android/webview_flutter_android.dart';
+import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 
-class InfoPage extends StatelessWidget {
-  const InfoPage({super.key});
+class InfoSheet {
+  static const _ink = Color(0xFF0E1A36);
 
-  @override
-  Widget build(BuildContext context) {
-    return AppScaffold(
-      currentIndex: 1,
-      onTabSelected: (index) => Navigator.pop(context),
-      child: Scaffold(
-        backgroundColor: Colors.white,
-        body: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+  static void show(BuildContext context) {
+    late final WebViewController controller;
+
+    // ✅ Setup WebView parameters depending on platform
+    late final PlatformWebViewControllerCreationParams params;
+    if (WebViewPlatform.instance is WebKitWebViewPlatform) {
+      params = WebKitWebViewControllerCreationParams(
+        allowsInlineMediaPlayback: true,
+      );
+    } else {
+      params = const PlatformWebViewControllerCreationParams();
+    }
+
+    // ✅ Configure WebView controller with scroll + JS + zoom enabled
+    controller = WebViewController.fromPlatformCreationParams(params)
+      ..enableZoom(true)
+      ..setBackgroundColor(Colors.white)
+      ..setNavigationDelegate(
+        NavigationDelegate(onNavigationRequest: (r) => NavigationDecision.navigate),
+      )
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..loadRequest(Uri.parse('https://cadeli.cy/terms-and-conditions/'));
+
+    // ✅ Clean, scrollable bottom sheet
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => FractionallySizedBox(
+        heightFactor: 0.9, // takes up 90% of the screen height
+        child: Column(
           children: [
-            const Padding(
-              padding: EdgeInsets.fromLTRB(20, 16, 20, 10),
-              child: Text(
-                'About Cadeli',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w800,
-                  color: Color(0xFF1A2D3D),
-                ),
+            const SizedBox(height: 10),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.black26,
+                borderRadius: BorderRadius.circular(2),
               ),
             ),
-            const SizedBox(height: 14),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 20),
-              child: Text(
-                'Cadeli is Cyprus’ first tech-first, eco-friendly water delivery subscription. This page can show contact info, company story, or legal terms later.',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.black87,
-                  height: 1.6,
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    "Terms & Conditions",
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      color: _ink,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: _ink, size: 26),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            // ✅ WebView that scrolls inside the sheet
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: WebViewWidget(
+                    controller: controller,
+                    gestureRecognizers: <Factory<OneSequenceGestureRecognizer>>{
+                      Factory<VerticalDragGestureRecognizer>(
+                            () => VerticalDragGestureRecognizer(),
+                      ),
+                    },
+                  ),
                 ),
               ),
             ),

@@ -25,7 +25,7 @@ class CartPage extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Padding(
-              padding: EdgeInsets.fromLTRB(20, 16, 20, 10),
+              padding: EdgeInsets.fromLTRB(20, 12, 20, 6),   // slightly tighter top
               child: Text(
                 'Cart',
                 style: TextStyle(
@@ -35,11 +35,11 @@ class CartPage extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 8),
 
             // Back to products
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 20),
               child: GestureDetector(
                 onTap: () => Navigator.pop(context),
                 child: Container(
@@ -48,10 +48,6 @@ class CartPage extends StatelessWidget {
                     color: Colors.white.withOpacity(0.2),
                     borderRadius: BorderRadius.circular(40),
                     border: Border.all(color: Colors.white.withOpacity(0.4)),
-                    boxShadow: const [
-                      BoxShadow(color: Colors.black26, blurRadius: 8, offset: Offset(0, 4)),
-                      BoxShadow(color: Colors.white30, offset: Offset(0, -2), blurRadius: 2),
-                    ],
                   ),
                   child: const Row(
                     mainAxisSize: MainAxisSize.min,
@@ -65,7 +61,7 @@ class CartPage extends StatelessWidget {
               ),
             ),
 
-            const SizedBox(height: 20),
+            const SizedBox(height: 8),
             const Center(
               child: Text(
                 'Your Cart Items',
@@ -79,59 +75,62 @@ class CartPage extends StatelessWidget {
               child: cartItems.isEmpty
                   ? const Center(child: Text("Your cart is empty"))
                   : ListView.builder(
-                padding: const EdgeInsets.all(16),
-                itemCount: cartItems.length,
-                itemBuilder: (context, index) {
-                  final item = cartItems[index];
-                  final product = item['product'];
-                  final int quantity = item['quantity'];
-                  final double unitPrice = product.price;
-                  final double totalPrice = unitPrice * quantity;
+                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 16), // align to grid
+                      itemCount: cartItems.length,
+                      itemBuilder: (context, index) {
+                        final item = cartItems[index];
+                        final product = item['product'];
+                        final int quantity = item['quantity'];
+                        final double unitPrice = product.price;
+                        final double totalPrice = unitPrice * quantity;
 
-                  return GestureDetector(
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => ProductDetailPage(product: product),
-                        ),
-                      );
-                    },
-                    child: Container(
-                      margin: const EdgeInsets.symmetric(vertical: 10),
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.3),
-                        borderRadius: BorderRadius.circular(22),
-                        border: Border.all(color: Colors.white.withOpacity(0.4)),
-                        boxShadow: const [
-                          BoxShadow(color: Colors.black26, blurRadius: 14, offset: Offset(0, 6)),
-                          BoxShadow(color: Colors.white30, offset: Offset(0, -2), blurRadius: 4),
-                        ],
-                      ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
-                            child: Image.network(
-                              product.imageUrl,
-                              width: 60,
-                              height: 60,
-                              fit: BoxFit.cover,
-                              loadingBuilder: (context, child, loadingProgress) {
-                                if (loadingProgress == null) return child;
-                                return const SizedBox(
-                                  width: 60,
-                                  height: 60,
-                                  child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-                                );
-                              },
-                              errorBuilder: (context, error, stackTrace) =>
-                              const Icon(Icons.broken_image, color: Colors.red, size: 40),
-                            ),
+                    return GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => ProductDetailPage(product: product),
                           ),
-                          const SizedBox(width: 12),
+                        );
+                      },
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(vertical: 10),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.3),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: Colors.white.withOpacity(0.4)),
+                          boxShadow: const [
+                            BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 4)),
+                            BoxShadow(color: Colors.white24, blurRadius: 2, offset: Offset(0, -2)),
+                          ],
+                        ),
+
+
+
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: Image.network(
+                                product.imageUrl,
+                                width: 60,
+                                height: 60,
+                                fit: BoxFit.cover,
+                                loadingBuilder: (context, child, loadingProgress) {
+                                  if (loadingProgress == null) return child;
+                                  return const SizedBox(
+                                    width: 60,
+                                    height: 60,
+                                    child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                                  );
+                                },
+                                errorBuilder: (context, error, stackTrace) =>
+                                const Icon(Icons.broken_image, color: Colors.red, size: 40),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
 
                           // middle text
                           Expanded(
@@ -224,20 +223,22 @@ class CartPage extends StatelessWidget {
 
                     // Totals (keep shipping synced with Woo order creation)
                     Builder(builder: (context) {
-                      final subtotal = cartProvider.subtotal;
-                      const double shippingFlat = 2.50;
-                      final grand = subtotal + shippingFlat;
+                      final double priceWithoutVat = cartProvider.subtotal;
+                      const double vatRate = 0.19;          // 19% (CY)
+                      final double vatAmount = priceWithoutVat * vatRate;
+                      final double grandTotal = priceWithoutVat + vatAmount ;
 
                       return Column(
                         children: [
-                          _totalsRow('Subtotal', subtotal),
+                          _totalsRow('Price (without VAT)', priceWithoutVat),
                           const SizedBox(height: 6),
-                          _totalsRow('Shipping', shippingFlat),
+                          _totalsRow('VAT (19%)', vatAmount),
                           const SizedBox(height: 10),
-                          _totalsRow('Total', grand, isBold: true, big: true),
+                          _totalsRow('Total', grandTotal, isBold: true, big: true),
                         ],
                       );
                     }),
+
 
                     const SizedBox(height: 14),
 

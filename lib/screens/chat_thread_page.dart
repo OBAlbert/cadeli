@@ -32,43 +32,80 @@ class _SystemChip extends StatelessWidget {
     return '$h:$m $ap';
   }
 
+  // If a single token is extremely long (no spaces), insert zero-width spaces
+  // every N chars so it can wrap without overflowing.
+  String _safelyWrapLongTokens(String s, {int chunk = 24}) {
+    final words = s.split(' ');
+    for (var i = 0; i < words.length; i++) {
+      final w = words[i];
+      if (w.length > chunk) {
+        // Insert \u200B between characters so Flutter can wrap it.
+        words[i] = w.split('').join('\u200B');
+      }
+    }
+    return words.join(' ');
+  }
+
+
+
   @override
   Widget build(BuildContext context) {
     final when = time != null ? _fmt(time!) : '';
+    final maxChipWidth = (MediaQuery.of(context).size.width * 0.82).clamp(0, 600);
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         children: [
           const Expanded(child: Divider()),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: const Color(0xFFEFF2F6),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: Colors.white.withOpacity(0.8)),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.info_outline, size: 16, color: Color(0xFF4A5673)),
-                const SizedBox(width: 6),
-                Flexible(
-                  child: Text(text,
-                      style: const TextStyle(fontSize: 12, color: Color(0xFF4A5673), fontWeight: FontWeight.w600)),
-                ),
-                if (when.isNotEmpty) ...[
-                  const SizedBox(width: 8),
-                  Text(when, style: const TextStyle(fontSize: 10, color: Color(0xFF7C869D))),
+          const SizedBox(width: 12),
+          ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: maxChipWidth.toDouble()),
+            child: Container(
+              clipBehavior: Clip.antiAlias, // no leaks
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEFF2F6),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.white.withOpacity(0.8)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // centered message text with safe wrapping
+                  Text(
+                    _safelyWrapLongTokens(text),
+                    textAlign: TextAlign.center,
+                    softWrap: true,
+                    maxLines: null,
+                    overflow: TextOverflow.clip,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFF4A5673),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  if (when.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      when,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontSize: 10, color: Color(0xFF7C869D)),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
+          const SizedBox(width: 12),
           const Expanded(child: Divider()),
         ],
       ),
     );
   }
 }
+
+
 
 class _Bubble extends StatelessWidget {
   const _Bubble({required this.text, required this.isMine, required this.time});
@@ -108,14 +145,20 @@ class _Bubble extends StatelessWidget {
         child: Column(
           crossAxisAlignment: isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
           children: [
+            // inside _Bubble.build
             Text(
-              text,
+              _safelyWrapLongTokens(text),
+              softWrap: true,
+              maxLines: null,
+              overflow: TextOverflow.clip,
               style: TextStyle(
                 fontWeight: FontWeight.w700,
                 color: isMine ? Colors.white : const Color(0xFF1A233D),
                 fontSize: 14,
               ),
             ),
+
+
             const SizedBox(height: 4),
             Text(
               _fmt(time),
@@ -168,9 +211,10 @@ class _ChatThreadPageState extends State<ChatThreadPage> {
   ChatService.instance.ensureChat(
   orderId: widget.orderId,
   customerId: widget.customerId,
-  adminId: 'ADMIN',
+  adminId: '', // harmless, or:
   );
   }
+
   // Mark read on open
   ChatService.instance.markThreadRead(widget.orderId, isAdmin: widget.isAdminView);
   }
@@ -412,7 +456,9 @@ class _InputBar extends StatelessWidget {
                   final (label, text) = quickActions[i];
                   return OutlinedButton(
                     style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: Color(0xFF1A233D)),
+                      foregroundColor: Colors.white,
+                      backgroundColor: const Color(0xFF1A233D),
+                      side: const BorderSide(color: Colors.white),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                       visualDensity: VisualDensity.compact,
                     ),
@@ -474,9 +520,68 @@ class _InputBar extends StatelessWidget {
   }
 }
 
+String? _pidOfItem(Map it) {
+  final pid = (it['product_id'] ?? it['productId'] ?? it['id']);
+  return pid?.toString();
+}
+
+String? _thumbFromImmediate(Map it) {
+  if (it['image'] is Map && (it['image']['src'] ?? '').toString().isNotEmpty) {
+    return it['image']['src'].toString();
+  }
+  if (it['image'] is String && (it['image'] as String).startsWith('http')) {
+    return it['image'].toString();
+  }
+  if (it['images'] is List && (it['images'] as List).isNotEmpty) {
+    final m = (it['images'] as List).first;
+    if (m is Map && (m['src'] ?? '').toString().isNotEmpty) return m['src'].toString();
+  }
+  if ((it['imageUrl'] ?? '').toString().startsWith('http')) return it['imageUrl'].toString();
+  return null;
+}
+
+Widget itemThumb(Map it, {double size = 36}) {
+  final url = _thumbFromImmediate(it);
+  if (url != null && url.isNotEmpty) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: Image.network(
+        url,
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+      ),
+    );
+  }
+
+  final pid = _pidOfItem(it);
+  if (pid == null) return const SizedBox.shrink();
+
+  return FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+    future: FirebaseFirestore.instance.collection('products').doc(pid).get(),
+    builder: (context, snap) {
+      final m = snap.data?.data();
+      final img = (m?['imageUrl'] ?? m?['image'] ?? '').toString();
+      if (img.isEmpty) return const SizedBox.shrink();
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Image.network(
+          img,
+          width: size,
+          height: size,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+        ),
+      );
+    },
+  );
+}
+
 class _OrderDetailsSheet extends StatelessWidget {
   const _OrderDetailsSheet({required this.orderId});
   final String orderId;
+
 
   @override
   Widget build(BuildContext context) {
@@ -498,6 +603,13 @@ class _OrderDetailsSheet extends StatelessWidget {
             final address = (m['address'] as Map?) ?? {};
             final total = (m['total'] ?? m['amount'] ?? 0).toString();
             final currency = (m['currency'] ?? '').toString();
+            final currencySymbol = currency == 'EUR'
+                ? '€'
+                : currency == 'USD'
+                ? '\$'
+                : currency == 'GBP'
+                ? '£'
+                : currency; // fallback
             final email = (m['email'] ?? m['address']?['email'] ?? '').toString();
 
             return Container(
@@ -510,46 +622,119 @@ class _OrderDetailsSheet extends StatelessWidget {
                     child: Container(width: 44, height: 5, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(3))),
                   ),
                   const SizedBox(height: 16),
-                  Text('Order #$orderId', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+                  Text('Order Receipt', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Color(0xFF1A233D))),
+
                   if (email.isNotEmpty) ...[
                     const SizedBox(height: 4),
-                    Text(email, style: const TextStyle(color: Colors.black54)),
+                    const Text(
+                      // keep it subtle but in brand color
+                      '',
+                      // placeholder removed – we’ll show email below with color
+                    ),
                   ],
+                  // Replace the small gray line with dark-blue email:
+                  if (email.isNotEmpty)
+                    const SizedBox(height: 0),
+                  if (email.isNotEmpty)
+                    Text(email, style: const TextStyle(color: Color(0xFF1A2D3D), fontWeight: FontWeight.w600)),
+
                   const SizedBox(height: 16),
                   const Divider(height: 24),
-                  const Text('Items', style: TextStyle(fontWeight: FontWeight.w700)),
+                  const Text('Items', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF1A233D))),
                   const SizedBox(height: 8),
-                  ...items.map((it) {
-                    final name = (it is Map && it['name'] != null) ? it['name'].toString() : 'Item';
-                    final qty  = (it is Map && it['quantity'] != null) ? it['quantity'].toString() : '1';
-                    final price = (it is Map && it['total'] != null) ? it['total'].toString() : '';
+
+                  ...items.map((raw) {
+                    // normalize to Map<String, dynamic>
+                    final Map<String, dynamic> it = (raw is Map<String, dynamic>)
+                        ? raw
+                        : Map<String, dynamic>.from(raw as Map);
+
+                    final String name = (it['name'] ?? 'Item').toString();
+                    final String qty  = (it['quantity'] ?? 1).toString();
+                    final String price = (it['total'] ?? '').toString(); // show line total on the right
+
                     return Padding(
                       padding: const EdgeInsets.symmetric(vertical: 6),
                       child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          Expanded(child: Text('$name × $qty', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600))),
-                          Text(price.isNotEmpty ? '$currency $price' : '', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                          // thumbnail (helper hides itself if none/404)
+                          itemThumb(it, size: 36),
+                          const SizedBox(width: 10),
+
+                          // name × qty
+                          Expanded(
+                            child: Text(
+                              '$name × $qty',
+                              softWrap: true,
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF1A2D3D), // dark blue body
+                              ),
+                            ),
+                          ),
+
+                          // price (uses the already computed currencySymbol)
+                          Text(
+                            price.isNotEmpty ? '$currencySymbol $price' : '',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF1A2D3D), // dark blue price
+                            ),
+                          ),
                         ],
                       ),
                     );
                   }),
+
+
                   const SizedBox(height: 16),
                   const Divider(height: 24),
-                  const Text('Delivery', style: TextStyle(fontWeight: FontWeight.w700)),
+                  const Text('Delivery', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF1A233D))),
                   const SizedBox(height: 8),
-                  Text((address['address_1'] ?? address['line1'] ?? address['address'] ?? '').toString(),
-                      style: const TextStyle(fontWeight: FontWeight.w600)),
-                  if ((address['city'] ?? '').toString().isNotEmpty) Text(address['city'], style: const TextStyle(color: Colors.black54)),
-                  if ((address['country'] ?? '').toString().isNotEmpty) Text(address['country'], style: const TextStyle(color: Colors.black54)),
+
+                  Text(
+                    (address['address_1'] ?? address['line1'] ?? address['address'] ?? '').toString(),
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF2A3A58), // slightly lighter than header
+                    ),
+                  ),
+                  if ((address['city'] ?? '').toString().isNotEmpty)
+                    Text(
+                      address['city'],
+                      style: const TextStyle(fontSize: 13, color: Color(0xFF2A3A58)),
+                    ),
+                  if ((address['country'] ?? '').toString().isNotEmpty)
+                    Text(
+                      address['country'],
+                      style: const TextStyle(fontSize: 13, color: Color(0xFF2A3A58)),
+                    ),
+
+
                   const SizedBox(height: 16),
                   const Divider(height: 24),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('Total', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
-                      Text('$currency $total', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+                      const Text(
+                        'Total (incl. VAT)',
+                        style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: Color(0xFF1A233D)),
+                      ),
+                      Text(
+                        '$currency $total',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 16,
+                          color: Color(0xFF1A2D3D),
+                        ),
+                      ),
                     ],
                   ),
+
                   const SizedBox(height: 12),
                 ],
               ),
@@ -559,4 +744,19 @@ class _OrderDetailsSheet extends StatelessWidget {
       },
     );
   }
+
+
+
 }
+
+String _safelyWrapLongTokens(String s, {int chunk = 24}) {
+  final words = s.split(' ');
+  for (var i = 0; i < words.length; i++) {
+    final w = words[i];
+    if (w.length > chunk) {
+      words[i] = w.split('').join('\u200B');
+    }
+  }
+  return words.join(' ');
+}
+

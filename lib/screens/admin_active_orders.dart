@@ -3,6 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+
 
 // NEW: for chat
 import '../services/chat_service.dart';        // <-- adjust path if needed
@@ -376,7 +378,7 @@ class _ActiveOrdersPageState extends State<ActiveOrdersPage> {
                               _circleBtn(
                                 icon: Icons.chat_bubble_outline,
                                 color: Colors.blueGrey,
-                                onTap: () {
+                                onTap: () async {
                                   final orderId = order['id'] as String;
                                   final customerId = (order['userId'] ?? '').toString();
                                   if (customerId.isEmpty) {
@@ -385,6 +387,16 @@ class _ActiveOrdersPageState extends State<ActiveOrdersPage> {
                                     );
                                     return;
                                   }
+
+                                  // ✅ Ensure the chat doc is fully shaped (admins in participants etc.)
+                                  await ChatService.instance.ensureChat(
+                                    orderId: orderId,
+                                    customerId: customerId,
+                                    adminId: FirebaseAuth.instance.currentUser!.uid,
+                                    status: 'active',
+                                  );
+
+                                  if (!mounted) return;
                                   Navigator.push(
                                     context,
                                     MaterialPageRoute(
@@ -396,8 +408,8 @@ class _ActiveOrdersPageState extends State<ActiveOrdersPage> {
                                     ),
                                   );
                                 },
-
                               ),
+
                             ],
                           ),
                         ],

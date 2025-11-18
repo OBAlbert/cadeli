@@ -50,6 +50,7 @@ dependencies:
   cloud_functions: ^4.6.8
   url_launcher: ^6.3.0
   webview_flutter: ^4.5.0
+  webview_flutter_web: ^0.2.2+1
 
 
 
@@ -118,6 +119,7 @@ flutter:
     - assets/background/start_background.jpg
     - assets/background/startpic.jpg
     - assets/background/startcadeli.jpg
+    - assets/background/cadeli_old_start.jpg
     - assets/background/fade_base.jpg
     - assets/cadeli.logo.jpg
     - assets/index/index1.jpg

@@ -53,12 +53,15 @@ class ChatListPage extends StatelessWidget {
             stream: FirebaseAuth.instance.authStateChanges(),
             builder: (context, userSnap) {
               final user = userSnap.data;
-              if (!isAdmin && user == null) {
+              if (user == null) {
                 return const Center(
-                  child: Text('Sign in to view your order chats', style: TextStyle(color: Colors.black54, fontWeight: FontWeight.w600)),
+                  child: Text(
+                    'Sign in to view chats',
+                    style: TextStyle(color: Colors.black54, fontWeight: FontWeight.w600),
+                  ),
                 );
               }
-              final uid = isAdmin ? (user?.uid ?? 'ADMIN') : (user?.uid ?? '');
+              final uid = user.uid;
 
               return Padding(
                 padding: const EdgeInsets.only(top: 8),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/product.dart';
 import '../services/woocommerce_service.dart';
+import 'home_page.dart';
 import 'product_detail_page.dart';
 import '../widget/product_card.dart';
 import '../widget/brand_scroll_row.dart';
@@ -72,8 +73,6 @@ class _ProductsPageState extends State<ProductsPage> {
       });
     }
   }
-
-
 
   // --------------- Filters ----------------
 
@@ -270,19 +269,19 @@ class _ChipButton extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFFE1EFFE) : Colors.white,
+          color: selected ? kCadeliBlue : Colors.white,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: selected ? const Color(0xFF3B82F6) : Colors.grey[300]!,
-            width: 1.0,
+            color: selected ? kCadeliBlue : Colors.grey[300]!,
+            width: 1,
           ),
         ),
         child: Text(
           label,
           style: TextStyle(
             fontSize: 13,
-            fontWeight: FontWeight.w500,
-            color: selected ? const Color(0xFF1E40AF) : Colors.black,
+            fontWeight: FontWeight.w600,
+            color: selected ? Colors.white : Colors.black,
           ),
         ),
       ),

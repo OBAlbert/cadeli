@@ -4,6 +4,9 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_functions/cloud_functions.dart'; // call Firebase Cloud Functions
+import 'package:firebase_auth/firebase_auth.dart';
+import '../services/chat_service.dart';
+
 
 /// Admin view for orders awaiting approval.
 /// Accept -> capture payment (server), set status=active.
@@ -191,16 +194,13 @@ class _PendingOrdersPageState extends State<PendingOrdersPage> {
         ]),
       });
 
-      final userId = order['userId'] as String? ?? '';
+      final userId = (order['userId'] as String? ?? '');
       if (userId.isNotEmpty) {
-        await FirebaseFirestore.instance
-            .collection('chats').doc(userId)
-            .collection('messages').add({
-          'sender': 'system',
-          'text': '✅ Your order has been accepted! We\'re preparing it now.',
-          'timestamp': FieldValue.serverTimestamp(),
-        });
+        await ChatService.instance.ensureChat(
+            orderId: docId, customerId: userId, adminId: FirebaseAuth.instance.currentUser!.uid, status: 'active');
+        await ChatService.instance.sendSystem(docId, '✅ Your order has been accepted! We\'re preparing it now.');
       }
+
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -245,16 +245,13 @@ class _PendingOrdersPageState extends State<PendingOrdersPage> {
         ]),
       });
 
-      final userId = order['userId'] as String? ?? '';
+      final userId = (order['userId'] as String? ?? '');
       if (userId.isNotEmpty) {
-        await FirebaseFirestore.instance
-            .collection('chats').doc(userId)
-            .collection('messages').add({
-          'sender': 'system',
-          'text': '❌ Your order was rejected. The payment authorization has been voided.',
-          'timestamp': FieldValue.serverTimestamp(),
-        });
+        await ChatService.instance.ensureChat(
+            orderId: docId, customerId: userId, adminId: FirebaseAuth.instance.currentUser!.uid, status: 'rejected');
+        await ChatService.instance.sendSystem(docId, '❌ Your order was rejected. The payment authorization has been voided.');
       }
+
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

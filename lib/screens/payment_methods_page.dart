@@ -1,8 +1,10 @@
 import 'dart:ui';
-import 'package:cadeli/screens/payment_prefs.dart';
-import '../models/payment_method.dart';
 import 'package:flutter/material.dart';
-import 'add_payment_method_page.dart';
+import 'package:flutter_stripe/flutter_stripe.dart';
+
+import '../models/payment_method.dart' as app;
+import '../services/payment_service.dart';
+import '../screens/payment_prefs.dart';
 
 class PaymentMethodsPage extends StatefulWidget {
   const PaymentMethodsPage({super.key});
@@ -12,97 +14,180 @@ class PaymentMethodsPage extends StatefulWidget {
 }
 
 class _PaymentMethodsPageState extends State<PaymentMethodsPage> {
-  PaymentMethod? selectedMethod;
+  final PaymentService _paymentService = PaymentService();
+  List<Map<String, dynamic>> savedCards = [];
+  app.PaymentMethod? selectedMethod;
+  bool _loading = false;
 
   @override
   void initState() {
     super.initState();
-    loadMethod();
+    _loadSavedCards();
   }
 
-  Future<void> loadMethod() async {
-    final method = await PaymentPrefs.getSelectedPaymentMethod();
-    setState(() {
-      selectedMethod = method;
-    });
+  Future<void> _loadSavedCards() async {
+    setState(() => _loading = true);
+    try {
+      final cards = await _paymentService.listPaymentMethods();
+      setState(() => savedCards = cards);
+    } catch (e) {
+      debugPrint('Error loading cards: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to load saved cards')),
+      );
+    } finally {
+      setState(() => _loading = false);
+    }
   }
 
-  void selectMethod(PaymentMethod method) async {
+  void _selectMethod(app.PaymentMethod method) async {
     await PaymentPrefs.saveSelectedPaymentMethod(method);
-    setState(() {
-      selectedMethod = method;
-    });
+    setState(() => selectedMethod = method);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Selected ${method.type.toUpperCase()}')),
+    );
+  }
+
+  Future<void> _addNewCard() async {
+    try {
+      // 1️⃣ Create setup intent & customer
+      final setup = await _paymentService.createSetupIntent();
+      final clientSecret = setup['clientSecret'];
+      final customerId = setup['customerId'];
+
+      // 2️⃣ Initialize PaymentSheet for saving a card
+      await Stripe.instance.initPaymentSheet(
+        paymentSheetParameters: SetupPaymentSheetParameters(
+          merchantDisplayName: 'Cadeli',
+          customerId: customerId,
+          setupIntentClientSecret: clientSecret,
+          style: ThemeMode.light,
+          allowsDelayedPaymentMethods: false,
+        ),
+      );
+
+      // 3️⃣ Present sheet (saves the card)
+      await Stripe.instance.presentPaymentSheet();
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Card added successfully')),
+      );
+
+      // 4️⃣ Refresh saved list
+      await _loadSavedCards();
+    } on StripeException catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Payment sheet cancelled: ${e.error.localizedMessage ?? e.toString()}')),
+      );
+    } catch (e) {
+      debugPrint('Error adding card: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to add card: $e')),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
+
+      // ✅ Added AppBar
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new, color: Color(0xFF0E1A36)),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: const Text(
+          'Payment Methods',
+          style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.w800,
+            color: Color(0xFF0E1A36),
+          ),
+        ),
+        centerTitle: true,
+      ),
+
+      // ✅ Page Body
       body: SafeArea(
-        child: SingleChildScrollView(
+        child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 🔵 Title: Payment Methods
-              const Text(
-                'Payment Methods',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w800,
-                  color: Color(0xFF1A2D3D),
+              if (_loading)
+                const Center(child: CircularProgressIndicator())
+              else if (savedCards.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.only(top: 40),
+                  child: Center(
+                    child: Text(
+                      'No saved cards yet',
+                      style: TextStyle(color: Colors.grey, fontSize: 16),
+                    ),
+                  ),
+                )
+              else
+                SizedBox(
+                  height: 130,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: savedCards.length,
+                    itemBuilder: (context, i) {
+                      final card = savedCards[i];
+                      return _buildCard(
+                        method: app.PaymentMethod(
+                          type: card['brand'] ?? '',
+                          last4: card['last4'] ?? '',
+                          expiry: '${card['exp_month']}/${card['exp_year']}',
+                        ),
+                        stripeId: card['id'],
+                      );
+                    },
+                  ),
                 ),
-              ),
 
-              const SizedBox(height: 30),
+              const Spacer(),
 
-              // 🖤 Subtitle: Recently used
-              const Text(
-                'Recently used',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black,
+              // ✅ Add New Card Button
+              GestureDetector(
+                onTap: _addNewCard,
+                child: Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.symmetric(vertical: 10),
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.grey.withOpacity(0.2)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        blurRadius: 6,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.add, color: Color(0xFF0E1A36)),
+                      SizedBox(width: 10),
+                      Text(
+                        'Add New Card',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: Color(0xFF0E1A36),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-
-              const SizedBox(height: 16),
-
-              // 💳 Horizontal card list
-              SizedBox(
-                height: 120,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  children: [
-                    _buildCard(method: PaymentMethod(type: 'visa', last4: '4242', expiry: '12/26')),
-                    _buildCard(method: PaymentMethod(type: 'mastercard', last4: '0924', expiry: '09/24')),
-                    _buildCard(method: PaymentMethod(type: 'paypal')),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 40),
-
-              // ➕ Full-width glassy buttons
-              _buildButton(
-                icon: Icons.add,
-                label: 'Add new card',
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const AddPaymentMethodPage()),
-                  );
-                },
-              ),
-              _buildButton(
-                icon: Icons.money,
-                label: 'Cash on delivery',
-                onTap: () => selectMethod(PaymentMethod(type: 'cod')),
-              ),
-              _buildButton(
-                icon: Icons.phone_iphone,
-                label: 'Apple Pay',
-                onTap: () => selectMethod(PaymentMethod(type: 'apple_pay')),
               ),
             ],
           ),
@@ -111,31 +196,30 @@ class _PaymentMethodsPageState extends State<PaymentMethodsPage> {
     );
   }
 
-
-  Widget _buildCard({required PaymentMethod method}) {
-    final isSelected = selectedMethod?.type == method.type && selectedMethod?.last4 == method.last4;
-
+  Widget _buildCard({required app.PaymentMethod method, String? stripeId}) {
+    final isSelected = selectedMethod?.last4 == method.last4;
     String asset = 'visa.png';
-    if (method.type == 'mastercard') asset = 'mastercard.png';
-    if (method.type == 'paypal') asset = 'paypal.png';
+    if (method.type.contains('master')) asset = 'mastercard.png';
+    if (method.type.contains('amex')) asset = 'amex.png';
 
     return GestureDetector(
-      onTap: () => selectMethod(method),
+      onTap: () => _selectMethod(method),
+      onLongPress: stripeId != null ? () => _showCardMenu(stripeId) : null,
       child: Container(
         width: 130,
         margin: const EdgeInsets.only(right: 14),
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.15),
-          borderRadius: BorderRadius.circular(20),
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
           border: Border.all(
-            color: isSelected ? Colors.blueAccent : Colors.grey.withOpacity(0.2),
-            width: 2,
+            color: isSelected ? const Color(0xFF0E1A36) : Colors.grey.withOpacity(0.3),
+            width: isSelected ? 2.5 : 1.5,
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 6,
+              color: Colors.black.withOpacity(0.08),
+              blurRadius: 8,
               offset: const Offset(0, 4),
             ),
           ],
@@ -145,53 +229,55 @@ class _PaymentMethodsPageState extends State<PaymentMethodsPage> {
           children: [
             Image.asset("assets/icons/$asset", width: 40, height: 40),
             const SizedBox(height: 10),
-            if (method.last4.isNotEmpty)
-              Text("**** ${method.last4}", style: const TextStyle(color: Colors.black,fontWeight: FontWeight.bold)),
-            if (method.expiry.isNotEmpty)
-              Text(method.expiry, style: const TextStyle(fontSize: 12, color: Colors.black)),
+            Text(
+              "**** ${method.last4}",
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF0E1A36),
+              ),
+            ),
+            Text(
+              method.expiry,
+              style: const TextStyle(
+                fontSize: 12,
+                color: Color(0xFF1A233D),
+              ),
+            ),
+
           ],
         ),
       ),
     );
   }
 
-  Widget _buildButton({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: double.infinity,
-        margin: const EdgeInsets.symmetric(vertical: 10),
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.grey.withOpacity(0.2)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 6,
-              offset: const Offset(0, 3),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Icon(icon, size: 24, color: Colors.black87),
-            const SizedBox(width: 14),
-            Text(
-              label,
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-                color: Colors.black87,
-              ),
-            ),
-          ],
-        ),
+  Future<void> _deleteCard(String id) async {
+    try {
+      await _paymentService.deletePaymentMethod(id);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Card deleted')),
+      );
+      await _loadSavedCards();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Delete failed: $e')),
+      );
+    }
+  }
+
+  void _showCardMenu(String id) {
+    showModalBottomSheet(
+      context: context,
+      builder: (_) => SafeArea(
+        child: Wrap(children: [
+          ListTile(
+            leading: const Icon(Icons.delete, color: Colors.red),
+            title: const Text('Delete card'),
+            onTap: () {
+              Navigator.pop(context);
+              _deleteCard(id);
+            },
+          ),
+        ]),
       ),
     );
   }

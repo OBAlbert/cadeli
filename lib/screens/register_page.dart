@@ -30,6 +30,8 @@ class _RegisterPageState extends State<RegisterPage> {
   final confirmPasswordController = TextEditingController();
 
   bool isLoading=false; int? forceResendToken; int resend=0; Timer? _t;
+  bool isAdultConfirmed = false;   // ✅ user must be 18+
+  String? ageError;   // ⚠️ inline age warning
   @override void dispose(){ for(final f in otpFocusNodes) f.dispose();
   phoneController.dispose(); otpController.dispose(); nameController.dispose();
   emailController.dispose(); addressController.dispose(); passwordController.dispose();
@@ -181,6 +183,15 @@ class _RegisterPageState extends State<RegisterPage> {
                         height: 60,
                         child: ElevatedButton(
                           onPressed: () {
+                            // ✅ must confirm 18+ on first step
+                            if (currentStep == 0 && !isAdultConfirmed) {
+                              setState(() => ageError = "(* Must confirm you are 18+ to continue *)");
+                              return;
+                            } else {
+                              setState(() => ageError = null);
+                            }
+
+
                             if (currentStep == 0) {
                               isCodeSent ? verifyOtp() : sendOtp();
                             } else if (currentStep < 3) {
@@ -189,6 +200,7 @@ class _RegisterPageState extends State<RegisterPage> {
                               createAccount();
                             }
                           },
+
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFFC70418),
                             shape: RoundedRectangleBorder(
@@ -295,6 +307,65 @@ class _RegisterPageState extends State<RegisterPage> {
 
               ),
             ),
+            if (!isCodeSent) ...[
+              const SizedBox(height: 12),
+
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Transform.scale(
+                      scale: 1.1,
+                      child: Checkbox(
+                        value: isAdultConfirmed,
+                        onChanged: (v) => setState(() => isAdultConfirmed = v ?? false),
+                        activeColor: const Color(0xFFC70418),
+                        checkColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    const Expanded(
+                      child: Text(
+                        "I confirm that I am 18 years of age or older.",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          height: 1.2,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              if (ageError != null)
+                Padding(
+                  padding: const EdgeInsets.only(left: 56, top: 4),
+                  child: Text(
+                    ageError!,
+                    style: const TextStyle(
+                      color: Color(0xFFD32F2F), // deep red for clarity
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.3,
+                      height: 1.2,
+                      shadows: [
+                        Shadow(
+                          color: Colors.black26,
+                          blurRadius: 2,
+                          offset: Offset(0.5, 0.5),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+            ],
+
+
 
             if (isCodeSent) ...[
               const SizedBox(height: 24),

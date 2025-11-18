@@ -140,8 +140,10 @@ class AppScaffold extends StatelessWidget {
                       const SizedBox(width: 8),
                       IconButton(icon: const Icon(Icons.search, size:22, color: Color(0xFF1A233D)),
                           onPressed: ()=>Navigator.push(context, MaterialPageRoute(builder:(_)=>SearchPage()))),
-                      IconButton(icon: const Icon(Icons.info_outline, size:22, color: Color(0xFF1A233D)),
-                          onPressed: ()=>Navigator.push(context, MaterialPageRoute(builder:(_)=>const InfoPage()))),
+                      IconButton(
+                        icon: const Icon(Icons.info_outline, size: 22, color: Color(0xFF1A233D)),
+                        onPressed: () => InfoSheet.show(context),
+                      ),
                       if(!isAdmin) Consumer<CartProvider>(builder:(context,cart,_)=>
                           Stack(children:[
                             IconButton(key: getCartIconKeyInstance(),
