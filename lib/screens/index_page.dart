@@ -26,7 +26,7 @@ class _IndexPageState extends State<IndexPage> {
       'image': 'assets/index/cadeli-autosubscribe.png',
       'title': 'Set Your Order',
       'subtitle':
-      'Activate Auto Reorder and let the app repeat your water automatically. Cancel anytime if needed.',
+      'Auto Reorder and let the app repeat your water automatically. Cancel anytime if needed.',
     },
     {
       'image': 'assets/index/cadeli-time.png',
