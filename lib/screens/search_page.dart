@@ -158,13 +158,17 @@ class _SearchPageState extends State<SearchPage> {
                   decoration: const InputDecoration(
                     hintText: 'Search anything...',
                     hintStyle: TextStyle(
-                      color: Colors.black,
+                      color: Colors.black12,
                       fontWeight: FontWeight.bold,
                     ),
                     border: InputBorder.none,
                     icon: Icon(Icons.search, color: Colors.black),
                   ),
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.black,         // ✅ USER TYPING TEXT = BLACK
+                  ),
                 ),
               ),
               const SizedBox(height: 18),

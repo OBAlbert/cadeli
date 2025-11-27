@@ -451,7 +451,6 @@ class _ProfilePageState extends State<ProfilePage> {
             // ✏️ Editable fields
             buildTextField("Full Name", nameController),
             buildTextField("Phone", phoneController),
-            buildTextField("Delivery Notes", notesController, maxLines: 2),
 
             // 🔘 Edit/Save
             const SizedBox(height: 12),

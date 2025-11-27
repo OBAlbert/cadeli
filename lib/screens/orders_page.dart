@@ -4,10 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-
 import '../models/cart_provider.dart';
 import '../models/product.dart';
 import 'chat_thread_page.dart';
+import 'package:cloud_functions/cloud_functions.dart';
+
 
 class OrdersPage extends StatefulWidget {
   const OrdersPage({super.key});
@@ -60,7 +61,7 @@ class _OrdersPageState extends State<OrdersPage> with SingleTickerProviderStateM
       ),
       body: TabBarView(
         controller: _tabs,
-        children: const [
+        children: [
           _OrdersStream(statuses: _OrdersPageState.activeStatuses,  mode: _OrdersMode.active),
           _OrdersStream(statuses: _OrdersPageState.historyStatuses, mode: _OrdersMode.history),
         ],
@@ -72,9 +73,11 @@ class _OrdersPageState extends State<OrdersPage> with SingleTickerProviderStateM
 enum _OrdersMode { active, history }
 
 class _OrdersStream extends StatelessWidget {
-  const _OrdersStream({required this.statuses, required this.mode});
+  _OrdersStream({required this.statuses, required this.mode});
   final List<String> statuses;
   final _OrdersMode mode;
+  final ValueNotifier<String> sortMode = ValueNotifier('newest');
+
 
   static const _ink = _OrdersPageState._ink;
   static const _cardBg = _OrdersPageState._cardBg;
@@ -111,25 +114,81 @@ class _OrdersStream extends StatelessWidget {
               return const Center(child: CircularProgressIndicator());
             }
 
-            // Merge A and B by doc id (avoid duplicates), then sort by updatedAt/timestamp desc.
+            // ---- MERGE QUERIES SAFELY ----
             final byId = <String, QueryDocumentSnapshot<Map<String, dynamic>>>{};
             for (final d in a.data?.docs ?? const []) byId[d.id] = d;
             for (final d in b.data?.docs ?? const []) byId[d.id] = d;
 
-            final docs = byId.values.toList()
-              ..sort((x, y) {
-                DateTime toDT(dynamic v) {
-                  if (v is Timestamp) return v.toDate();
-                  if (v is int)       return DateTime.fromMillisecondsSinceEpoch(v);
-                  if (v is String)    return DateTime.tryParse(v) ?? DateTime.fromMillisecondsSinceEpoch(0);
-                  return DateTime.fromMillisecondsSinceEpoch(0);
-                }
-                final ux = x.data()['updatedAt'] ?? x.data()['timestamp'];
-                final uy = y.data()['updatedAt'] ?? y.data()['timestamp'];
-                return toDT(uy).compareTo(toDT(ux));
-              });
+            final merged = byId.values.toList();
 
-            if (docs.isEmpty) {
+// ---- FILTER PARENT / CHILD LOGIC ----
+            List<QueryDocumentSnapshot<Map<String, dynamic>>> filtered = [];
+
+            for (final doc in merged) {
+              final m = doc.data();
+
+              final bool isSubscription = m['isSubscription'] == true;
+              final String? parentId = (m['parentId'] ?? m['subscription_parent'])?.toString();
+              final bool isChild = isSubscription && parentId != null && parentId.trim().isNotEmpty;
+
+              if (mode == _OrdersMode.active) {
+                // ⭐ ACTIVE TAB RULES:
+                // - show parent subscription orders only
+                // - show normal orders (not subscription)
+                if (isSubscription) {
+                  if (!isChild) filtered.add(doc);     // parent only
+                } else {
+                  filtered.add(doc);                  // normal order
+                }
+              } else {
+                // ⭐ HISTORY TAB RULES:
+                // - show delivered/complete child cycles
+                // - show delivered normal orders
+                if (isSubscription) {
+                  if (isChild) filtered.add(doc);     // only child cycles in history
+                } else {
+                  filtered.add(doc);                  // normal delivered orders
+                }
+              }
+            }
+
+            // ---- SORT WITH DROPDOWN OPTIONS ----
+            filtered.sort((x, y) {
+              final mX = x.data();
+              final mY = y.data();
+
+              double totalX = double.tryParse(mX['total']?.toString() ?? '') ?? 0.0;
+              double totalY = double.tryParse(mY['total']?.toString() ?? '') ?? 0.0;
+
+
+              int cycleX = mX['cycle_number'] ?? 0;
+              int cycleY = mY['cycle_number'] ?? 0;
+
+              DateTime toDT(dynamic v) {
+                if (v is Timestamp) return v.toDate();
+                if (v is int) return DateTime.fromMillisecondsSinceEpoch(v);
+                if (v is String) return DateTime.tryParse(v) ?? DateTime.now();
+                return DateTime.now();
+              }
+
+              final dateX = toDT(mX['updatedAt'] ?? mX['timestamp']);
+              final dateY = toDT(mY['updatedAt'] ?? mY['timestamp']);
+
+              switch (sortMode.value) {
+                case 'oldest':
+                  return dateX.compareTo(dateY);
+                case 'high_total':
+                  return totalY.compareTo(totalX);
+                case 'low_total':
+                  return totalX.compareTo(totalY);
+                case 'cycle':
+                  return cycleY.compareTo(cycleX);
+                default: // newest
+                  return dateY.compareTo(dateX);
+              }
+            });
+
+            if (filtered.isEmpty) {
               return Center(
                 child: Padding(
                   padding: const EdgeInsets.all(24),
@@ -148,19 +207,65 @@ class _OrdersStream extends StatelessWidget {
               );
             }
 
-            return Padding(
-              padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom),
-              child: ListView.separated(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-                itemCount: docs.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 12),
-                itemBuilder: (context, i) {
-                  final m = docs[i].data();
-                  final orderId = docs[i].id;
-                  return _OrderCard(orderId: orderId, data: m, mode: mode);
-                },
-              ),
+            return Column(
+              children: [
+                if (mode == _OrdersMode.history)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                    child:DropdownButtonFormField<String>(
+                      value: sortMode.value,
+                      dropdownColor: Colors.white, // menu background
+                      style: const TextStyle(
+                        color: Color(0xFF0E1A36), // dark blue text
+                        fontWeight: FontWeight.w600,
+                      ),
+                      decoration: InputDecoration(
+                        labelText: 'Sort by',
+                        labelStyle: const TextStyle(
+                          color: Color(0xFF0E1A36),
+                          fontWeight: FontWeight.w600,
+                        ),
+                        filled: true,
+                        fillColor: Colors.white,
+                        enabledBorder: OutlineInputBorder(
+                          borderSide: BorderSide(color: Color(0xFF0E1A36), width: 1),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderSide: BorderSide(color: Color(0xFF0E1A36), width: 1.4),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      items: const [
+                        DropdownMenuItem(value: 'newest', child: Text('Newest')),
+                        DropdownMenuItem(value: 'oldest', child: Text('Oldest')),
+                        DropdownMenuItem(value: 'high_total', child: Text('Highest Total')),
+                        DropdownMenuItem(value: 'low_total', child: Text('Lowest Total')),
+                        DropdownMenuItem(value: 'cycle', child: Text('Cycle Number')),
+                      ],
+                      onChanged: (v) => sortMode.value = v ?? 'newest',
+                    )
+
+                  ),
+
+                const SizedBox(height: 10),
+
+                Expanded(                               // ✔️ FIX: wrap list in Expanded
+                  child: ListView.separated(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                    itemCount: filtered.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 12),
+                    itemBuilder: (context, i) {
+                      final m = filtered[i].data();
+                      final orderId = filtered[i].id;
+                      return _OrderCard(orderId: orderId, data: m, mode: mode);
+                    },
+                  ),
+                ),
+              ],
             );
+
+
           },
         );
       },
@@ -186,37 +291,85 @@ class _OrderCard extends StatelessWidget {
 
   static final Map<String, String?> _imgCache = {};
 
+  // --------- BASIC HELPERS ---------
+
+  bool get _isSubscription => data['isSubscription'] == true;
+
+  String? get _parentId {
+    final v = data['parentId'] ?? data['subscription_parent'];
+    if (v == null) return null;
+    final s = v.toString().trim();
+    return s.isEmpty ? null : s;
+  }
+
+  bool get _isChildCycle => _isSubscription && _parentId != null;
+
+  int get _cycleNumber {
+    final raw = data['cycle_number'] ?? data['cycleNumber'] ?? data['meta']?['cycle_number'];
+    if (raw is int) return raw;
+    return int.tryParse(raw?.toString() ?? '') ?? 1;
+  }
+
+  String get _status => (data['status'] ?? '').toString();
+
+  String _shortId(String id) => id.length <= 6 ? id : id.substring(0, 6);
+
+  /// For chat we ALWAYS want to attach to the parent subscription,
+  /// so all cycles share one thread. One-off orders use their own id.
+  String get _chatOrderId {
+    if (_isChildCycle && _parentId != null) return _parentId!;
+    return orderId;
+  }
+
   String _fmtDate(dynamic tsOrMs) {
     DateTime d;
-    if (tsOrMs is Timestamp) d = tsOrMs.toDate();
-    else if (tsOrMs is int)  d = DateTime.fromMillisecondsSinceEpoch(tsOrMs);
-    else if (tsOrMs is String) d = DateTime.tryParse(tsOrMs) ?? DateTime.now();
-    else d = DateTime.now();
+    if (tsOrMs is Timestamp) {
+      d = tsOrMs.toDate();
+    } else if (tsOrMs is int) {
+      d = DateTime.fromMillisecondsSinceEpoch(tsOrMs);
+    } else if (tsOrMs is String) {
+      d = DateTime.tryParse(tsOrMs) ?? DateTime.now();
+    } else {
+      d = DateTime.now();
+    }
     return DateFormat('dd/MM').format(d);
   }
 
   Color _statusBg(String s) {
     switch (s.toLowerCase()) {
-      case 'pending': return const Color(0xFFFFE9C6);
+      case 'pending':
+        return const Color(0xFFFFE9C6);
       case 'processing':
-      case 'active':  return const Color(0xFFDFF7E3);
-      case 'out_for_delivery': return const Color(0xFFE6D9FF);
+      case 'active':
+        return const Color(0xFFDFF7E3);
+      case 'out_for_delivery':
+        return const Color(0xFFE6D9FF);
       case 'delivered':
-      case 'completed': return const Color(0xFFDFF7E3);
+      case 'completed':
+        return const Color(0xFFDFF7E3);
       case 'rejected':
-      case 'cancelled': return const Color(0xFFFDE2E1);
-      default: return const Color(0xFFEFEFEF);
+      case 'cancelled':
+        return const Color(0xFFFDE2E1);
+      default:
+        return const Color(0xFFEFEFEF);
     }
   }
+
   Color _statusFg(String s) {
     switch (s.toLowerCase()) {
-      case 'pending': return const Color(0xFFBE7A00);
-      case 'active':  return const Color(0xFF116C3E);
-      case 'out_for_delivery': return const Color(0xFF5C3ABF);
+      case 'pending':
+        return const Color(0xFFBE7A00);
+      case 'active':
+        return const Color(0xFF116C3E);
+      case 'out_for_delivery':
+        return const Color(0xFF5C3ABF);
       case 'delivered':
-      case 'completed': return const Color(0xFF116C3E);
-      case 'cancelled': return const Color(0xFFAA1D1D);
-      default: return const Color(0xFF444444);
+      case 'completed':
+        return const Color(0xFF116C3E);
+      case 'cancelled':
+        return const Color(0xFFAA1D1D);
+      default:
+        return const Color(0xFF444444);
     }
   }
 
@@ -271,12 +424,11 @@ class _OrderCard extends StatelessWidget {
 
   double _totalAmount() {
     // Most reliable first: single-value totals commonly used by your checkout
-    final direct =
-        data['total'] ??
-            data['amount'] ??
-            data['grandTotal'] ??
-            data['totalInclVat'] ??
-            data['total_incl_vat'];
+    final direct = data['total'] ??
+        data['amount'] ??
+        data['grandTotal'] ??
+        data['totalInclVat'] ??
+        data['total_incl_vat'];
 
     double? _toD(v) {
       if (v == null) return null;
@@ -308,14 +460,102 @@ class _OrderCard extends StatelessWidget {
     return legacy ?? 0.0;
   }
 
-  String get _status => (data['status'] ?? '').toString();
+  Future<bool?> _confirmDialog(
+      BuildContext context, {
+        required String title,
+        required String message,
+        String yesText = "Yes",
+        String noText = "No",
+      }) {
+    return showDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      builder: (_) {
+        return Dialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title,
+                    style: const TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black)),
+                const SizedBox(height: 12),
+                Text(message,
+                    style: const TextStyle(
+                        fontSize: 15, height: 1.4, color: Colors.black87)),
+                const SizedBox(height: 24),
+
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    // NO BUTTON
+                    OutlinedButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Colors.black87),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: Text(noText,
+                          style: const TextStyle(color: Colors.black87)),
+                    ),
+                    const SizedBox(width: 12),
+
+                    // YES BUTTON
+                    ElevatedButton(
+                      onPressed: () => Navigator.pop(context, true),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: Text(yesText),
+                    ),
+                  ],
+                )
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+
+
+  // --------- WIDGET BUILD ---------
 
   @override
   Widget build(BuildContext context) {
-    final updatedAt = data['updatedAt'] ?? data['timestamp'] ?? data['meta']?['order_placed_at_ms'];
-    final address   = data['address']?['address_1'] ?? data['meta']?['address_line'] ?? '';
-    final slot      = data['timeSlot'] ?? data['meta']?['delivery_type'];
-    final preview   = _previewItems();
+    final updatedAt = data['updatedAt'] ??
+        data['timestamp'] ??
+        data['meta']?['order_placed_at_ms'];
+    final address = data['address']?['address_1'] ??
+        data['meta']?['address_line'] ??
+        '';
+    final slot = data['timeSlot'] ?? data['meta']?['delivery_type'];
+    final preview = _previewItems();
+
+    // Title logic changes depending on parent/child/mode
+    String title;
+    if (_isSubscription) {
+      if (_isChildCycle) {
+        // Child cycle (mostly appears in History tab)
+        title = 'Cycle $_cycleNumber • Subscription';
+      } else {
+        // Parent subscription (Active tab)
+        title = 'Subscription • Cycle $_cycleNumber';
+      }
+    } else {
+      title = 'Order #$orderId';
+    }
 
     return InkWell(
       borderRadius: BorderRadius.circular(16),
@@ -334,12 +574,18 @@ class _OrderCard extends StatelessWidget {
           color: _cardBg,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: Colors.white.withOpacity(0.7)),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 16, offset: const Offset(0, 8))],
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.06),
+              blurRadius: 16,
+              offset: const Offset(0, 8),
+            )
+          ],
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Static shopping-style icon for order list
+            // Left icon / thumbnail
             Container(
               width: 48,
               height: 48,
@@ -350,7 +596,10 @@ class _OrderCard extends StatelessWidget {
               ),
               child: Builder(builder: (_) {
                 final items = _previewItems();
-                if (items.isNotEmpty && (items.first['imageUrl'] ?? '').toString().startsWith('http')) {
+                if (items.isNotEmpty &&
+                    (items.first['imageUrl'] ?? '')
+                        .toString()
+                        .startsWith('http')) {
                   return ClipRRect(
                     borderRadius: BorderRadius.circular(10),
                     child: Image.network(
@@ -359,16 +608,15 @@ class _OrderCard extends StatelessWidget {
                       width: 48,
                       height: 48,
                       errorBuilder: (_, __, ___) =>
-                      const Icon(Icons.local_mall_outlined, size: 28, color: _ink),
+                      const Icon(Icons.local_mall_outlined,
+                          size: 28, color: _ink),
                     ),
                   );
                 }
-                return const Icon(Icons.local_mall_outlined, size: 28, color: _ink);
+                return const Icon(Icons.local_mall_outlined,
+                    size: 28, color: _ink);
               }),
             ),
-
-
-
 
             const SizedBox(width: 12),
 
@@ -380,13 +628,23 @@ class _OrderCard extends StatelessWidget {
                   Row(children: [
                     Expanded(
                       child: Text(
-                        'Order #$orderId',
+                        title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: _ink),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 15,
+                          color: _ink,
+                        ),
                       ),
                     ),
-                    Text(_fmtDate(updatedAt), style: const TextStyle(fontSize: 12, color: _ink)),
+                    Text(
+                      _fmtDate(updatedAt),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: _ink,
+                      ),
+                    ),
                   ]),
                   const SizedBox(height: 6),
                   if (preview.isNotEmpty)
@@ -410,8 +668,16 @@ class _OrderCard extends StatelessWidget {
                       spacing: 8,
                       runSpacing: 6,
                       children: [
-                        if (address.toString().isNotEmpty) _chip(Icons.place, address, dense: true),
-                        if (slot != null) _chip(Icons.schedule, slot.toString(), dense: true),
+                        if (address.toString().isNotEmpty)
+                          _chip(Icons.place, address, dense: true),
+                        if (slot != null)
+                          _chip(Icons.schedule, slot.toString(), dense: true),
+                        if (_isChildCycle && _parentId != null)
+                          _chip(
+                            Icons.link,
+                            'Parent #${_shortId(_parentId!)}',
+                            dense: true,
+                          ),
                       ],
                     ),
                   ),
@@ -420,65 +686,73 @@ class _OrderCard extends StatelessWidget {
             ),
             const SizedBox(width: 10),
 
-            // Right column (responsive, no fixed width)
-            Flexible(
-              flex: 0,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _statusPill(_status),
-                  const SizedBox(height: 8),
-                  Text(
-                    '€${_totalAmount().toStringAsFixed(2)}',
-                    softWrap: false,
-                    overflow: TextOverflow.fade,
-                    style: const TextStyle(color: _ink, fontWeight: FontWeight.w800),
+            // Right column
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                _statusPill(_status),
+                const SizedBox(height: 8),
+
+                Text(
+                  '€${_totalAmount().toStringAsFixed(2)}',
+                  overflow: TextOverflow.fade,
+                  softWrap: false,
+                  style: const TextStyle(
+                    color: _ink,
+                    fontWeight: FontWeight.w800,
                   ),
-                  if (mode == _OrdersMode.active) const SizedBox(height: 8),
-                  if (mode == _OrdersMode.active)
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 90),
-                      child: TextButton.icon(
-                        onPressed: () {
-                          final customerId = (data['userId'] ?? data['customerId'])?.toString() ?? '';
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => ChatThreadPage(orderId: orderId, customerId: customerId, isAdminView: false),
-                            ),
-                          );
-                        },
-                        icon: const Icon(Icons.chat_bubble_outline, size: 15),
-                        label: const Flexible(
-                          child: Text(
-                            'Chat',
-                            maxLines: 1,
-                            overflow: TextOverflow.fade,
-                            style: TextStyle(fontSize: 12),
+                ),
+
+                if (mode == _OrdersMode.active && _isSubscription && !_isChildCycle)
+                  IconButton(
+                    icon: const Icon(Icons.list_alt, size: 20, color: _ink),
+                    splashRadius: 20,
+                    onPressed: () => _showCyclesSheet(context, orderId),
+                  ),
+
+                if (mode == _OrdersMode.active && _isSubscription && !_isChildCycle)
+                  IconButton(
+                    icon: const Icon(Icons.cancel_outlined, color: Colors.red, size: 20),
+                    splashRadius: 20,
+                    onPressed: () => _cancelSubscription(context, orderId),
+                  ),
+
+                if (mode == _OrdersMode.active)
+                  IconButton(
+                    icon: const Icon(Icons.chat_bubble_outline, size: 20, color: _ink),
+                    splashRadius: 20,
+                    onPressed: () {
+                      final customerId = (data['userId'] ?? data['customerId'])?.toString() ?? '';
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ChatThreadPage(
+                            orderId: _chatOrderId,
+                            customerId: customerId,
+                            isAdminView: false,
                           ),
                         ),
-                        style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          foregroundColor: _ink,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-
+                      );
+                    },
+                  ),
+              ],
+            )
           ],
         ),
       ),
     );
   }
 
+  // --------- SMALL UI HELPERS ---------
+
   String _itemsPreview(List<Map<String, dynamic>> items) {
-    final parts = items.take(2).map((e) => '${(e['name'] ?? 'Item')} x${e['quantity'] ?? 1}').toList();
-    final more  = items.length - parts.length;
-    final s     = parts.join(', ') + (more > 0 ? '  +$more more' : '');
+    final parts = items
+        .take(2)
+        .map((e) => '${(e['name'] ?? 'Item')} x${e['quantity'] ?? 1}')
+        .toList();
+    final more = items.length - parts.length;
+    final s = parts.join(', ') + (more > 0 ? '  +$more more' : '');
     return s.length > 90 ? '${s.substring(0, 87)}…' : s;
   }
 
@@ -492,30 +766,45 @@ class _OrderCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: fg.withOpacity(0.7), width: .6),
       ),
-      child: Text(s.toUpperCase(), style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: fg)),
+      child: Text(
+        s.toUpperCase(),
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+          color: fg,
+        ),
+      ),
     );
   }
 
   Widget _chip(IconData icon, String text, {bool dense = false}) {
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: dense ? 8 : 10, vertical: dense ? 4 : 6),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10)),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(icon, size: dense ? 14 : 16, color: _ink),
-        const SizedBox(width: 6),
-        ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 160),
-          child: Text(
-            text,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: _ink, fontSize: 12),
+      padding: EdgeInsets.symmetric(
+        horizontal: dense ? 8 : 10,
+        vertical: dense ? 4 : 6,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: dense ? 14 : 16, color: _ink),
+          const SizedBox(width: 6),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 160),
+            child: Text(
+              text,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: _ink, fontSize: 12),
+            ),
           ),
-        ),
-      ]),
+        ],
+      ),
     );
   }
-
 
   String? _pidOfItem(Map it) {
     final pid = (it['product_id'] ?? it['productId'] ?? it['id']);
@@ -523,24 +812,28 @@ class _OrderCard extends StatelessWidget {
   }
 
   String? _thumbFromImmediate(Map it) {
-    if (it['image'] is Map && (it['image']['src'] ?? '').toString().isNotEmpty) {
+    if (it['image'] is Map &&
+        (it['image']['src'] ?? '').toString().isNotEmpty) {
       return it['image']['src'].toString();
     }
-    if (it['image'] is String && (it['image'] as String).startsWith('http')) {
+    if (it['image'] is String &&
+        (it['image'] as String).startsWith('http')) {
       return it['image'].toString();
     }
     if (it['images'] is List && (it['images'] as List).isNotEmpty) {
       final m = (it['images'] as List).first;
-      if (m is Map && (m['src'] ?? '').toString().isNotEmpty) return m['src'].toString();
+      if (m is Map && (m['src'] ?? '').toString().isNotEmpty) {
+        return m['src'].toString();
+      }
     }
-    if ((it['imageUrl'] ?? '').toString().startsWith('http')) return it['imageUrl'].toString();
+    if ((it['imageUrl'] ?? '').toString().startsWith('http')) {
+      return it['imageUrl'].toString();
+    }
     return null;
   }
 
-  /// Builds a 44x44 image thumbnail for each product.
-  /// Uses Firestore `imageUrl` first, then WooCommerce fallbacks.
   Widget _itemThumb(Map it, {double size = 44}) {
-    // ✅ Primary: direct Firestore imageUrl (your current order schema)
+    // Primary: direct Firestore imageUrl (your current order schema)
     final img = (it['imageUrl'] ?? '').toString();
     if (img.isNotEmpty && img.startsWith('http')) {
       return ClipRRect(
@@ -550,14 +843,18 @@ class _OrderCard extends StatelessWidget {
           width: size,
           height: size,
           fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) =>
-          const Icon(Icons.local_mall_outlined, size: 28, color: _ink),
+          errorBuilder: (_, __, ___) => const Icon(
+            Icons.local_mall_outlined,
+            size: 28,
+            color: _ink,
+          ),
         ),
       );
     }
 
-    // 🧩 WooCommerce-style "image": { src: ... }
-    if (it['image'] is Map && (it['image']['src'] ?? '').toString().isNotEmpty) {
+    // WooCommerce-style "image": { src: ... }
+    if (it['image'] is Map &&
+        (it['image']['src'] ?? '').toString().isNotEmpty) {
       return ClipRRect(
         borderRadius: BorderRadius.circular(8),
         child: Image.network(
@@ -569,7 +866,7 @@ class _OrderCard extends StatelessWidget {
       );
     }
 
-    // 🖼 WooCommerce "images": [ {src: ...} ]
+    // WooCommerce "images": [ {src: ...} ]
     if (it['images'] is List && (it['images'] as List).isNotEmpty) {
       final first = (it['images'] as List).first;
       if (first is Map && (first['src'] ?? '').toString().isNotEmpty) {
@@ -585,7 +882,7 @@ class _OrderCard extends StatelessWidget {
       }
     }
 
-    // 🔎 Fallback: query Firestore product doc for its image
+    // Fallback: query Firestore product doc for its image
     final pid = (it['id'] ?? it['productId'])?.toString();
     if (pid == null) {
       return const Icon(Icons.local_mall_outlined, size: 28, color: _ink);
@@ -612,331 +909,237 @@ class _OrderCard extends StatelessWidget {
     );
   }
 
-  // ===== SHEETS =====
+// ================= CYCLES LIST SHEET =================
+  void _showCyclesSheet(BuildContext context, String parentId) async {
+    final qs = await FirebaseFirestore.instance
+        .collection('orders')
+        .where('parentId', isEqualTo: parentId)
+        .orderBy('cycle_number')
+        .get();
 
-  void _showDetailsSheet(BuildContext context, String orderId, Map<String, dynamic> data, List<Map<String, dynamic>> items) {
-    final rawItems = (data['items'] ?? data['wooLineItems'] ?? []) as List;
-    final items = rawItems.map((e) => Map<String, dynamic>.from(e)).toList();
-
-    final address = data['address']?['address_1'] ?? data['meta']?['address_line'] ?? '';
-    final method  = data['paymentMethod'] ?? data['payment']?['method'] ?? '—';
+    final cycles = qs.docs;
 
     showModalBottomSheet(
       context: context,
-      isScrollControlled: true,
       backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (_) => DraggableScrollableSheet(
-        initialChildSize: 0.8, maxChildSize: 0.94, minChildSize: 0.5, expand: false,
-        builder: (context, controller) {
-          return Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Center(child: _grabber()),
-              const SizedBox(height: 14),
-              Text('Order #$orderId', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: _ink)),
-              const SizedBox(height: 8),
-              _statusPill(_status),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 6,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) {
+        return Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Subscription Cycles',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: _ink,
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              ...cycles.map((c) {
+                final m = c.data();
+                final cycleNum = m['cycle_number'] ?? 1;
+                final delivered = m['updatedAt'] ?? m['timestamp'];
+
+                return ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text('Cycle $cycleNum'),
+                  subtitle: Text(_fmtDate(delivered)),
+                  trailing: const Icon(Icons.receipt_long),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _showReceiptSheet(context, c.id, m, (m['items'] as List?)?.cast<Map<String, dynamic>>() ?? []);
+                  },
+                );
+              }),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // ================= CANCEL SUBSCRIPTION =================
+  void _cancelSubscription(BuildContext context, String parentId) async {
+    final ok = await _confirmDialog(
+      context,
+      title: "Cancel Subscription?",
+      message: "Future cycles will stop. This cannot be undone.",
+      yesText: "Yes, cancel",
+      noText: "No",
+    );
+
+
+    if (ok != true) return;
+
+    try {
+      final callable =
+      FirebaseFunctions.instance.httpsCallable('cancelSubscription');
+      await callable.call(<String, dynamic>{
+        'docId': parentId,
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Subscription cancelled')),
+      );
+    } on FirebaseFunctionsException catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Could not cancel: ${e.message ?? 'Unknown error'}'),
+        ),
+      );
+    } catch (_) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Something went wrong, please try again.'),
+        ),
+      );
+    }
+  }
+
+
+
+  // ===== SHEETS =====
+// Active Order Details Sheet
+  void _showDetailsSheet(
+      BuildContext context,
+      String orderId,
+      Map<String, dynamic> data,
+      List<Map<String, dynamic>> preview,
+      ) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) {
+        return Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
                 children: [
-                  _chip(Icons.place, address.toString()),
-                  if (data['timeSlot'] != null) _chip(Icons.schedule, data['timeSlot'].toString()),
+                  const Text(
+                    'Order Details',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: _ink,
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    '#${orderId.substring(0, 6)}',
+                    style: const TextStyle(
+                      color: _ink,
+                      fontSize: 14,
+                    ),
+                  )
                 ],
               ),
               const SizedBox(height: 16),
-              const Text('Items', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: _ink)),
-              const SizedBox(height: 8),
-              Expanded(
-                child: ListView.builder(
-                  controller: controller,
-                  physics: const BouncingScrollPhysics(),
-                  itemCount: items.length,
-                  itemBuilder: (context, i) {
-                    final it    = items[i];
-                    final qty   = (it['quantity'] ?? 1) as num;
-                    final price = (it['price'] is num) ? (it['price'] as num).toDouble()
-                        : double.tryParse('${it['price']}') ?? 0.0;
-                    final total = it['total'] is num ? (it['total'] as num).toDouble() : (qty * price);
-                    final sym = _currencySymbolOf(data);
-                    final unitPrice = _numFrom(it['price']) ?? 0;
-                    final lineTotal = _numFrom(it['total']) ?? (qty > 0 ? unitPrice * qty : 0);
-                    final displayUnit = unitPrice > 0 ? unitPrice : (qty > 0 ? lineTotal / qty : 0);
-                    final thumb = _thumbFromItem(it);
 
-                    return ListTile(
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      leading: _itemThumb(it, size: 44),
+              // ITEMS LIST
+              ...preview.map((item) => Row(
+                children: [
+                  _itemThumb(item, size: 36),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      '${item["name"]} x${item["quantity"]}',
+                      style: const TextStyle(fontSize: 14, color: _ink),
+                    ),
+                  )
+                ],
+              )),
 
-                      minVerticalPadding: 8,
-                      visualDensity: VisualDensity.compact,
+              const SizedBox(height: 20),
 
-                      title: Text(
-                        (it['name'] ?? 'Item').toString(),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: _ink, fontWeight: FontWeight.w700, fontSize: 15),
-                      ),
-                      subtitle: Text(
-                        '$sym${displayUnit.toStringAsFixed(2)} • x$qty',
-                        style: const TextStyle(color: _ink, fontWeight: FontWeight.w600),
-                      ),
-                      trailing: Text(
-                        '$sym${lineTotal.toStringAsFixed(2)}',
-                        style: const TextStyle(color: _ink, fontWeight: FontWeight.w800),
-                      ),
-                    );
-                  },
+              // TOTAL
+              Text(
+                'Total: €${_totalAmount().toStringAsFixed(2)}',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: _ink,
                 ),
               ),
-              const Divider(),
-              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                Text('Payment: ${method.toString().toUpperCase()}', style: const TextStyle(color: _ink)),
-                Text('Total: €${_totalAmount().toStringAsFixed(2)}', style: const TextStyle(color: _ink, fontWeight: FontWeight.w800)),
-              ]),
-              const SizedBox(height: 12),
-              Row(children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () {
-                      Clipboard.setData(ClipboardData(text: orderId));
-                      Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Order ID copied')));
-                    },
-                    icon: const Icon(Icons.copy, color: _ink),
-                    label: const Text('Copy ID', style: TextStyle(color: _ink)),
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: _ink),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      final customerId = (data['userId'] ?? data['customerId'])?.toString() ?? '';
-                      Navigator.pop(context);
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => ChatThreadPage(orderId: orderId, customerId: customerId, isAdminView: false),
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.chat_bubble_outline),
-                    label: const Text('Chat'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _ink,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                    ),
-                  ),
-                ),
-              ]),
-            ]),
-          );
-        },
-      ),
+
+              const SizedBox(height: 24),
+            ],
+          ),
+        );
+      },
     );
   }
 
-  double? _numFrom(dynamic v) {
-    if (v == null) return null;
-    if (v is num) return v.toDouble();
-    final s = v.toString().replaceAll(',', '.').trim();
-    return double.tryParse(s);
-  }
-
-  String? _thumbFromItem(Map it) {
-    if (it['image'] is Map && (it['image']['src'] ?? '').toString().isNotEmpty) {
-      return it['image']['src'].toString();
-    }
-    if (it['image'] is String && (it['image'] as String).startsWith('http')) {
-      return it['image'].toString();
-    }
-    if (it['images'] is List && (it['images'] as List).isNotEmpty) {
-      final m = (it['images'] as List).first;
-      if (m is Map && (m['src'] ?? '').toString().isNotEmpty) return m['src'].toString();
-    }
-    if ((it['imageUrl'] ?? '').toString().startsWith('http')) return it['imageUrl'].toString();
-    return null;
-  }
-
-  String _currencySymbolOf(Map<String, dynamic> order) {
-    final c = (order['currency'] ?? order['meta']?['currency'] ?? 'EUR').toString().toUpperCase();
-    switch (c) {
-      case 'USD': return '\$';
-      case 'GBP': return '£';
-      case 'EUR': default: return '€';
-    }
-  }
-
-
-  void _showReceiptSheet(BuildContext context, String orderId, Map<String, dynamic> data, List<Map<String, dynamic>> items) {
-    final rawItems = (data['items'] ?? data['wooLineItems'] ?? []) as List;
-    final items = rawItems.map((e) => Map<String, dynamic>.from(e)).toList();
-
-    final subtotal = _computeSubtotal(items);
-    final total    = _totalAmount();
-    final vat      = (total - subtotal).clamp(0, total);
-
+// History Receipt Sheet
+  void _showReceiptSheet(
+      BuildContext context,
+      String orderId,
+      Map<String, dynamic> data,
+      List<Map<String, dynamic>> preview,
+      ) {
     showModalBottomSheet(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white, // 👈 force white
-
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (_) => DraggableScrollableSheet(
-        initialChildSize: 0.7, maxChildSize: 0.92, minChildSize: 0.5, expand: false,
-        builder: (context, controller) {
-          return Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Center(child: _grabber()),
-              const SizedBox(height: 14),
-              Text('Receipt • #$orderId', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: _ink)),
-              const SizedBox(height: 12),
-              Expanded(
-                child: ListView.builder(
-                  controller: controller,
-                  itemCount: items.length,
-                  itemBuilder: (context, i) {
-                    final it    = items[i];
-                    final qty   = (it['quantity'] ?? 1) as num;
-                    final price = (it['price'] is num)
-                        ? (it['price'] as num).toDouble()
-                        : double.tryParse('${it['price']}')
-                        ?? (double.tryParse('${it['total']}') ?? 0.0) / (qty == 0 ? 1 : qty);
-                    final totalLine = (it['total'] is num) ? (it['total'] as num).toDouble() : qty * price;
-                    final sym = _currencySymbolOf(data);
-                    final unitPrice = _numFrom(it['price']) ?? 0;
-                    final lineTotal = _numFrom(it['total']) ?? (qty > 0 ? unitPrice * qty : 0);
-                    final displayUnit = unitPrice > 0 ? unitPrice : (qty > 0 ? lineTotal / qty : 0);
-                    final thumb = _thumbFromItem(it);
-
-                    return ListTile(
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      leading: _itemThumb(it, size: 40),
-
-                      title: Text(
-                        (it['name'] ?? 'Item').toString(),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: _ink, fontWeight: FontWeight.w800, fontSize: 15),
-                      ),
-                      subtitle: Text(
-                        '$sym${displayUnit.toStringAsFixed(2)} • x$qty',
-                        style: const TextStyle(color: _ink, fontWeight: FontWeight.w600),
-                      ),
-                      trailing: Text(
-                        '$sym${lineTotal.toStringAsFixed(2)}',
-                        style: const TextStyle(color: _ink, fontWeight: FontWeight.w900, fontSize: 15),
-                      ),
-                    );
-                  },
-                ),
-              ),
-              const Divider(),
-
-              _row('Subtotal', '€${subtotal.toStringAsFixed(2)}'),
-              _row('VAT',      '€${vat.toStringAsFixed(2)}'),
-              _rowBold('Total','€${total.toStringAsFixed(2)}'),
-              const SizedBox(height: 12),
-              ElevatedButton.icon(
-                onPressed: () async { await _reorderToCart(context); },
-                icon: const Icon(Icons.refresh),
-                label: const Text('Re-order'),
-                style: ElevatedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(48),
-                  backgroundColor: _ink,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                ),
-              ),
-            ]),
-          );
-        },
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
+      builder: (_) {
+        return Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Receipt',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: _ink,
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              ...preview.map((item) => Row(
+                children: [
+                  _itemThumb(item, size: 34),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      '${item["name"]} x${item["quantity"]}',
+                      style: const TextStyle(fontSize: 14, color: _ink),
+                    ),
+                  ),
+                ],
+              )),
+
+              const SizedBox(height: 16),
+              Text(
+                'Paid: €${_totalAmount().toStringAsFixed(2)}',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: _ink,
+                ),
+              ),
+              const SizedBox(height: 24),
+            ],
+          ),
+        );
+      },
     );
   }
 
-  double _computeSubtotal(List<Map<String, dynamic>> items) {
-    double s = 0;
-    for (final it in items) {
-      final qty   = (it['quantity'] ?? 1) as num;
-      final price = (it['price'] is num)
-          ? (it['price'] as num).toDouble()
-          : double.tryParse('${it['price']}')
-          ?? (double.tryParse('${it['total']}') ?? 0.0) / (qty == 0 ? 1 : qty);
-      s += price * qty;
-    }
-    return s;
-  }
-
-  Widget _row(String a, String b) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 6),
-    child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-      Text(a, style: const TextStyle(color: _ink)),
-      Text(b, style: const TextStyle(color: _ink)),
-    ]),
-  );
-
-  Widget _rowBold(String a, String b) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 6),
-    child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-      Text(a, style: const TextStyle(color: _ink, fontWeight: FontWeight.w800)),
-      Text(b, style: const TextStyle(color: _ink, fontWeight: FontWeight.w800)),
-    ]),
-  );
-
-  Widget _grabber() => Container(
-    width: 40,
-    height: 4,
-    decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(2)),
-  );
-
-  // ===== ACTIONS =====
-
-  Future<void> _reorderToCart(BuildContext context) async {
-    final rawItems = _reorderItems();
-    if (rawItems.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No items to re-order')));
-      return;
-    }
-
-    final cart = context.read<CartProvider>();
-    int added = 0;
-
-    for (final it in rawItems) {
-      final pid = (it['id'] ?? it['productId'])?.toString();
-      final qty = (it['quantity'] ?? 1) as num;
-      if (pid == null) continue;
-
-      final snap = await FirebaseFirestore.instance.collection('products').doc(pid).get();
-      if (!snap.exists) continue;
-      final m = snap.data()!;
-
-      final p = Product(
-        id: (m['id'] ?? pid).toString(),
-        name: (m['name'] ?? it['name'] ?? 'Product').toString(),
-        brand: (m['brand'] ?? '').toString(),
-        price: (m['price'] is num) ? (m['price'] as num).toDouble() : double.tryParse('${m['price']}') ?? 0.0,
-        imageUrl: (m['imageUrl'] ?? m['image'] ?? '').toString(),
-        brandId: (m['brandId'] ?? '0').toString(),
-        brandImage: (m['brandImage'] ?? '').toString(),
-        categoryIds: (m['categoryIds'] as List?)?.map((e) => int.tryParse('$e') ?? 0).toList() ?? const [],
-        categoryNames: (m['categoryNames'] as List?)?.map((e) => e.toString()).toList() ?? const [],
-        categoryImages: (m['categoryImages'] as List?)?.map((e) => e.toString()).toList() ?? const [],
-        categoryParents: (m['categoryParents'] as List?)?.map((e) => int.tryParse('$e') ?? 0).toList(),
-        salePrice: (m['salePrice'] is num) ? (m['salePrice'] as num).toDouble() : double.tryParse('${m['salePrice']}'),
-      );
-
-      cart.add(p, qty: qty.toInt());
-      added += qty.toInt();
-    }
-
-    Navigator.pop(context);
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Added $added item(s) to cart')));
-  }
 }

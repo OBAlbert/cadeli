@@ -136,6 +136,15 @@ flutter:
     - assets/icons/profile_icon.png
     - assets/icons/product_icon.png
     - assets/icons/admin_icon.png
+    - assets/icons/truck.png
+    - assets/index/cadeli-drive.png
+    - assets/index/cadeli-time.png
+    - assets/index/cadeli-subscribe.png
+    - assets/index/cadeli-deliver.png
+    - assets/index/cadeli-account.png
+    - assets/index/cadeli-autosubscribe.png
+
+
   #   - images/a_dot_burr.jpeg
   #   - images/a_dot_ham.jpeg
 

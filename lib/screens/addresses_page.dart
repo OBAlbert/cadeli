@@ -4,6 +4,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cadeli/screens/pick_location_page.dart';
 
+import '../utils/address_icon.dart';
+
 class AddressesPage extends StatefulWidget {
   const AddressesPage({super.key});
   @override
@@ -37,6 +39,22 @@ class _AddressesPageState extends State<AddressesPage> {
     });
     if (!hasDefault) await _setDefault(doc.id);
   }
+
+  String _formatDetails(Map<String, dynamic> d) {
+    final list = <String>[];
+
+    if (d['floor'] != null && d['floor'].toString().trim().isNotEmpty)
+      list.add("Floor: ${d['floor']}");
+
+    if (d['entrance'] != null && d['entrance'].toString().trim().isNotEmpty)
+      list.add("Entrance: ${d['entrance']}");
+
+    if (d['notes'] != null && d['notes'].toString().trim().isNotEmpty)
+      list.add("Notes: ${d['notes']}");
+
+    return list.join("\n");
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -87,21 +105,71 @@ class _AddressesPageState extends State<AddressesPage> {
                       border: Border.all(color: Colors.white.withOpacity(0.7)),
                       boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 18, offset: const Offset(0, 8))],
                     ),
-                    child: ListTile(
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      leading: Icon(isDefault ? Icons.star : Icons.location_on, color: const Color(0xFF254573)),
-                      title: Text(label, style: const TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF0E1A36))),
-                      subtitle: isDefault ? const Text('Default address', style: TextStyle(color: Colors.green)) : null,
-                      trailing: PopupMenuButton<String>(
-                        onSelected: (v) async {
-                          if (v == 'default') await _setDefault(d.id);
-                          if (v == 'delete') await _delete(d.id);
-                        },
-                        itemBuilder: (_) => const [
-                          PopupMenuItem(value: 'default', child: Text('Set as default')),
-                          PopupMenuItem(value: 'delete', child: Text('Delete')),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            addressIcon(data['type'] ?? 'other'),
+                            size: 28,
+                            color: const Color(0xFF254573),
+                          ),
+                          const SizedBox(width: 14),
+
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  label,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 16,
+                                    color: Color(0xFF0E1A36),
+                                  ),
+                                ),
+
+                                // DETAILS (smaller grey text)
+                                if (data['details'] != null) ...[
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    _formatDetails(data['details']),
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      height: 1.3,
+                                      color: Colors.black54,
+                                    ),
+                                  ),
+                                ],
+
+                                if (isDefault)
+                                  const Padding(
+                                    padding: EdgeInsets.only(top: 6),
+                                    child: Text(
+                                      'Default address',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        color: Colors.green,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+
+                          PopupMenuButton<String>(
+                            onSelected: (v) async {
+                              if (v == 'default') await _setDefault(d.id);
+                              if (v == 'delete') await _delete(d.id);
+                            },
+                            itemBuilder: (_) => const [
+                              PopupMenuItem(value: 'default', child: Text('Set as default')),
+                              PopupMenuItem(value: 'delete', child: Text('Delete')),
+                            ],
+                          ),
                         ],
-                        icon: const Icon(Icons.more_vert, color: Color(0xFF0E1A36)),
                       ),
                     ),
                   );

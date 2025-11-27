@@ -5,7 +5,9 @@ import 'package:google_place/google_place.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart'; // GeoPoint, FirebaseFirestore, FieldValue
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+import 'address_type_page.dart'; // GeoPoint, FirebaseFirestore, FieldValue
 
 
 const _placesApiKey = 'AIzaSyADsxWf0_pAhv8BOQ1oXWefCuj-PJP7qCY'; // BROWSER KEY
@@ -54,8 +56,13 @@ class _PickLocationPageState extends State<PickLocationPage> {
     required String country,
     required double lat,
     required double lng,
+
+    required String type,                 // NEW
+    required Map<String, dynamic> details, // NEW
+
     bool setAsDefault = true,
-  }) async {
+  })
+  async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) throw Exception('Not signed in');
 
@@ -69,13 +76,16 @@ class _PickLocationPageState extends State<PickLocationPage> {
       'id': doc.id,
       'label': label,
       'line1': line1,
+
+      'type': type,              // NEW
+      'details': details,        // NEW
+
       'city': city,
       'country': country,
       'lat': lat,
       'lng': lng,
       'geo': GeoPoint(lat, lng),
-      'phone': '',
-      'isDefault': false, // we’ll set below
+      'isDefault': false,
       'timestamp': FieldValue.serverTimestamp(),
     };
 
@@ -338,26 +348,51 @@ class _PickLocationPageState extends State<PickLocationPage> {
                           _rejectOutside();
                           return;
                         }
+
                         final city = _lastPlacemark?.locality ?? 'Larnaca';
                         final country = _lastPlacemark?.isoCountryCode ?? 'CY';
 
+                        // 1) Open the NEW Address Type selector screen
+                        final structured = await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => AddressTypePage(
+                              lat: _picked.latitude,
+                              lng: _picked.longitude,
+                              formatted: _address,
+                              city: city,
+                              country: country,
+                            ),
+                          ),
+                        );
+
+                        // If user cancelled, do nothing
+                        if (structured == null) return;
+
+                        // 2) When user completes flow → save to Firestore
                         try {
                           final saved = await _saveAddressToFirestore(
-                            label: _address,
-                            line1: _address,
-                            city: city,
-                            country: country,
-                            lat: _picked.latitude,
-                            lng: _picked.longitude,
-                            setAsDefault: true, // new address becomes default
+                            label: structured['formatted'],         // formatted address
+                            line1: structured['formatted'],         // same as label
+                            city: structured['city'],
+                            country: structured['country'],
+                            lat: structured['lat'],
+                            lng: structured['lng'],
+
+                            // NEW
+                            type: structured['type'],               // apartment, house, etc
+                            details: structured['details'],         // fully structured details
+                            setAsDefault: true,
                           );
-                          if (mounted) Navigator.pop<Map<String, dynamic>>(context, saved);
+
+                          if (mounted) Navigator.pop(context, saved);
                         } catch (e) {
                           if (!mounted) return;
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Could not save address: $e')),
+                            SnackBar(content: Text("Couldn't save: $e")),
                           );
                         }
+
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF254573),

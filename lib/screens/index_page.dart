@@ -12,29 +12,39 @@ class IndexPage extends StatefulWidget {
 }
 
 class _IndexPageState extends State<IndexPage> {
-  final PageController _controller = PageController(viewportFraction: 0.95);
+  final PageController _controller = PageController();
   int _currentPage = 0;
 
   final List<Map<String, String>> slides = [
     {
-      'image': 'assets/index/index1.jpg',
-      'title': 'Fast Delivery',
-      'subtitle': 'Get water delivered to your door in minutes.',
+      'image': 'assets/index/cadeli-account.png',
+      'title': 'Create Account',
+      'subtitle':
+      'Set up your profile in seconds. Add your basic details and get ready to order your water quickly and easily.',
     },
     {
-      'image': 'assets/index/index2.jpg',
-      'title': 'Multiple Sizes',
-      'subtitle': 'Choose bottles that suit your needs.',
+      'image': 'assets/index/cadeli-autosubscribe.png',
+      'title': 'Set Your Order',
+      'subtitle':
+      'Activate Auto Reorder and let the app repeat your water automatically. Cancel anytime if needed.',
     },
     {
-      'image': 'assets/index/index3.jpg',
-      'title': 'Easy Reordering',
-      'subtitle': 'Repeat orders with one tap.',
+      'image': 'assets/index/cadeli-time.png',
+      'title': 'Set Delivery Time',
+      'subtitle':
+      'Pick the exact day and time you want your delivery. Once you submit it, your order goes for approval.',
     },
     {
-      'image': 'assets/index/index4.jpg',
-      'title': 'Fresh Sources',
-      'subtitle': 'Water sourced from trusted springs.',
+      'image': 'assets/index/cadeli-drive.png',
+      'title': 'Free Delivery',
+      'subtitle':
+      'After approval, the Cadeli truck heads your way — always with free delivery.',
+    },
+    {
+      'image': 'assets/index/cadeli-deliver.png',
+      'title': 'Delivered to You',
+      'subtitle':
+      'Our delivery team brings your packs right to your doorstep. Fresh water, on time, every time.',
     },
   ];
 
@@ -96,14 +106,20 @@ class _IndexPageState extends State<IndexPage> {
                         child: Column(
                           children: [
                             SizedBox(
-                              height: 400,
+                              height: MediaQuery.of(context).size.height * 0.45,
                               child: ClipRRect(
                                 borderRadius: BorderRadius.circular(20),
-                                child: Image.asset(
-                                  slides[index]['image']!,
-                                  fit: BoxFit.cover,
+                                child: Container(
                                   width: double.infinity,
+                                  height: double.infinity,
+                                  color: Colors.white, // prevents leaks behind transparent PNGs
+                                  child: Image.asset(
+                                    slides[index]['image']!,
+                                    fit: BoxFit.cover,
+                                    alignment: Alignment.center,
+                                  ),
                                 ),
+
                               ),
                             ),
                             const SizedBox(height: 30),

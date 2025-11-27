@@ -70,7 +70,7 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
-    _startSlideTimer();
+    // _startSlideTimer();
     _fetchProducts();
     _fetchPillCategories(); // only children under parent 96
   }
@@ -179,82 +179,104 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  // Widget _buildSlideCarousel() {
+  //   return Padding(
+  //     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+  //     child: ClipRRect(
+  //       borderRadius: BorderRadius.circular(20),
+  //       child: Stack(
+  //         alignment: Alignment.bottomCenter,
+  //         children: [
+  //           SizedBox(
+  //             height: 240,
+  //             child: PageView.builder(
+  //               controller: _pageController,
+  //               itemCount: slides.length,
+  //               onPageChanged: (index) => setState(() => _currentIndex = index),
+  //               itemBuilder: (context, index) {
+  //                 final slide = slides[index];
+  //                 return Stack(
+  //                   fit: StackFit.expand,
+  //                   children: [
+  //                     Image.asset(slide['image']!, fit: BoxFit.cover),
+  //                     Container(color: Colors.black.withOpacity(0.5)),
+  //                     Positioned(
+  //                       left: 16,
+  //                       right: 16,
+  //                       top: 40,
+  //                       child: Column(
+  //                         crossAxisAlignment: CrossAxisAlignment.start,
+  //                         children: [
+  //                           Text(
+  //                             slide['title']!,
+  //                             style: const TextStyle(
+  //                               color: Colors.white,
+  //                               fontSize: 22,
+  //                               fontWeight: FontWeight.bold,
+  //                             ),
+  //                           ),
+  //                           const SizedBox(height: 8),
+  //                           Text(
+  //                             slide['text']!,
+  //                             style: const TextStyle(
+  //                               color: Colors.white70,
+  //                               fontSize: 14,
+  //                               height: 1.4,
+  //                             ),
+  //                           ),
+  //                         ],
+  //                       ),
+  //                     ),
+  //                   ],
+  //                 );
+  //               },
+  //             ),
+  //           ),
+  //           Positioned(
+  //             bottom: 12,
+  //             child: Row(
+  //               mainAxisAlignment: MainAxisAlignment.center,
+  //               children: List.generate(
+  //                 slides.length,
+  //                     (index) => Container(
+  //                   margin: const EdgeInsets.symmetric(horizontal: 4),
+  //                   width: _currentIndex == index ? 12 : 6,
+  //                   height: 6,
+  //                   decoration: BoxDecoration(
+  //                     color: _currentIndex == index ? Colors.blue : Colors.grey[300],
+  //                     borderRadius: BorderRadius.circular(3),
+  //                   ),
+  //                 ),
+  //               ),
+  //             ),
+  //           ),
+  //         ],
+  //       ),
+  //     ),
+  //   );
+  // }
   Widget _buildSlideCarousel() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(20),
-        child: Stack(
-          alignment: Alignment.bottomCenter,
-          children: [
-            SizedBox(
-              height: 240,
-              child: PageView.builder(
-                controller: _pageController,
-                itemCount: slides.length,
-                onPageChanged: (index) => setState(() => _currentIndex = index),
-                itemBuilder: (context, index) {
-                  final slide = slides[index];
-                  return Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      Image.asset(slide['image']!, fit: BoxFit.cover),
-                      Container(color: Colors.black.withOpacity(0.5)),
-                      Positioned(
-                        left: 16,
-                        right: 16,
-                        top: 40,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              slide['title']!,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 22,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              slide['text']!,
-                              style: const TextStyle(
-                                color: Colors.white70,
-                                fontSize: 14,
-                                height: 1.4,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  );
-                },
-              ),
-            ),
-            Positioned(
-              bottom: 12,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(
-                  slides.length,
-                      (index) => Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 4),
-                    width: _currentIndex == index ? 12 : 6,
-                    height: 6,
-                    decoration: BoxDecoration(
-                      color: _currentIndex == index ? Colors.blue : Colors.grey[300],
-                      borderRadius: BorderRadius.circular(3),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
+        child: Container(
+          height: 240,
+          width: double.infinity,
+          color: Colors.white,
+          alignment: Alignment.center,
+          child: Image.asset(
+            'assets/index/cadeli-drive.png',
+            fit: BoxFit.contain,      // FULL image visible
+            alignment: Alignment.center,
+            scale: 1.2,               // ✅ slight zoom-out (this solves your truck cut-off)
+          ),
         ),
       ),
     );
   }
+
+
 
   Widget _buildCategoryScroll() {
     return Padding(

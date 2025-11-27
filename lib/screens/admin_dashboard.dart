@@ -61,7 +61,7 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
         children: const [
           PendingOrdersPage(),
           ActiveOrdersPage(),
-          OrderHistoryPage(),
+          AdminOrderHistoryPage(),
         ],
       ),
     );

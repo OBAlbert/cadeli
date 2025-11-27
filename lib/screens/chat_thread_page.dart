@@ -105,6 +105,16 @@ class _SystemChip extends StatelessWidget {
   }
 }
 
+String _safelyWrapLongTokens(String s, {int chunk = 24}) {
+  final words = s.split(' ');
+  for (var i = 0; i < words.length; i++) {
+    final w = words[i];
+    if (w.length > chunk) {
+      words[i] = w.split('').join('\u200B');
+    }
+  }
+  return words.join(' ');
+}
 
 
 class _Bubble extends StatelessWidget {
@@ -611,6 +621,11 @@ class _OrderDetailsSheet extends StatelessWidget {
                 ? '£'
                 : currency; // fallback
             final email = (m['email'] ?? m['address']?['email'] ?? '').toString();
+            // SUBSCRIPTION LOGIC (moved OUTSIDE widget tree)
+            final bool isSub = (m['meta']?['delivery_type'] ?? '') == 'subscription';
+            final String cycle = (m['cycle_number'] ?? '').toString();
+            final String parent = (m['parentId'] ?? '').toString();
+
 
             return Container(
               color: Colors.white,
@@ -632,7 +647,7 @@ class _OrderDetailsSheet extends StatelessWidget {
                       // placeholder removed – we’ll show email below with color
                     ),
                   ],
-                  // Replace the small gray line with dark-blue email:
+                  // dark-blue email:
                   if (email.isNotEmpty)
                     const SizedBox(height: 0),
                   if (email.isNotEmpty)
@@ -735,6 +750,84 @@ class _OrderDetailsSheet extends StatelessWidget {
                     ],
                   ),
 
+                  if (isSub) ...[
+                    const SizedBox(height: 20),
+                    const Divider(height: 24),
+
+                    const Text(
+                      'Subscription Details',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF1A233D),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    if (cycle.isNotEmpty)
+                      Text(
+                        'Current Cycle: $cycle',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF1A2D3D),
+                        ),
+                      ),
+
+                    if (parent.isNotEmpty)
+                      Text(
+                        'Parent Subscription: ${parent.substring(0, 8)}',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Color(0xFF2A3A58),
+                        ),
+                      ),
+
+                    const SizedBox(height: 20),
+
+                    ElevatedButton.icon(
+                      icon: const Icon(Icons.cancel, color: Colors.white),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
+                        minimumSize: const Size(double.infinity, 48),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      label: const Text(
+                        'Cancel Subscription',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                      onPressed: () async {
+                        final ok = await showDialog<bool>(
+                          context: context,
+                          builder: (_) => AlertDialog(
+                            title: const Text('Cancel Subscription'),
+                            content: const Text('Are you sure you want to cancel this subscription?'),
+                            actions: [
+                              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('No')),
+                              ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Yes')),
+                            ],
+                          ),
+                        );
+                        if (ok == true) {
+                          await FirebaseFirestore.instance
+                              .collection('orders')
+                              .doc(orderId)
+                              .update({
+                            'subscriptionCancelled': true,
+                            'status': 'cancelled',
+                            'updatedAt': FieldValue.serverTimestamp(),
+                          });
+                          Navigator.pop(context);
+                        }
+                      },
+                    ),
+                  ],
+
+
+
                   const SizedBox(height: 12),
                 ],
               ),
@@ -749,14 +842,4 @@ class _OrderDetailsSheet extends StatelessWidget {
 
 }
 
-String _safelyWrapLongTokens(String s, {int chunk = 24}) {
-  final words = s.split(' ');
-  for (var i = 0; i < words.length; i++) {
-    final w = words[i];
-    if (w.length > chunk) {
-      words[i] = w.split('').join('\u200B');
-    }
-  }
-  return words.join(' ');
-}
 

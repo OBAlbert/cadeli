@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../screens/pick_location_page.dart';
+import '../utils/address_icon.dart';
 
 class AddressDropdown extends StatefulWidget {
   const AddressDropdown({super.key});
@@ -16,6 +17,8 @@ class _AddressDropdownState extends State<AddressDropdown> {
 
   CollectionReference<Map<String, dynamic>> _col(String uid) =>
       FirebaseFirestore.instance.collection('users').doc(uid).collection('addresses');
+
+
 
   Future<void> _setDefault(String id) async {
     final uid = FirebaseAuth.instance.currentUser!.uid;
@@ -148,7 +151,11 @@ class _AddressDropdownState extends State<AddressDropdown> {
 
         return CompositedTransformTarget(
           link: _layerLink,
-          child: _Shell(onTap: _toggle, label: defaultLabel),
+          child: _Shell(
+            onTap: _toggle,
+            label: defaultLabel,
+            iconType: defaultDoc.data()['type'] ?? 'other',
+          ),
         );
       },
     );
@@ -159,13 +166,17 @@ class _Shell extends StatelessWidget {
   final VoidCallback onTap;
   final String label;
   final bool showChevron;
+  final String? iconType;
   final Widget? leading;
+
   const _Shell({
     required this.onTap,
     required this.label,
     this.showChevron = true,
     this.leading,
+    this.iconType,
   });
+
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
@@ -179,7 +190,12 @@ class _Shell extends StatelessWidget {
         ),
         constraints: const BoxConstraints(maxWidth: 280),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
-          leading ?? const Icon(Icons.location_on, size: 18, color: Color(0xFF1A233D)),
+          leading ?? Icon(
+            addressIcon(iconType ?? 'other'),
+            size: 18,
+            color: const Color(0xFF1A233D),
+          ),
+
           const SizedBox(width: 6),
           Flexible(
             child: Text(
@@ -241,12 +257,13 @@ class _DropdownList extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(vertical: 10),
                   child: Row(children: [
                     Icon(
-                      (docs[i].data()['isDefault'] ?? false)
+                      docs[i].data()['isDefault'] == true
                           ? Icons.star
-                          : Icons.location_on_outlined,
+                          : addressIcon(docs[i].data()['type'] ?? 'other'),
                       size: 18,
                       color: const Color(0xFF1A233D),
                     ),
+
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
