@@ -259,17 +259,14 @@ class _HomePageState extends State<HomePage> {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: Container(
+        borderRadius: BorderRadius.circular(20),   // ✅ rounded corners applied
+        child: SizedBox(
           height: 240,
           width: double.infinity,
-          color: Colors.white,
-          alignment: Alignment.center,
           child: Image.asset(
-            'assets/index/cadeli-drive.png',
-            fit: BoxFit.contain,      // FULL image visible
-            alignment: Alignment.center,
-            scale: 1.2,               // ✅ slight zoom-out (this solves your truck cut-off)
+            'assets/index/cadeli-drive-cut.jpg',
+            fit: BoxFit.cover,                      // 🔥 fills frame like old slider
+            alignment: Alignment.center,            // 🔥 centered truck
           ),
         ),
       ),
